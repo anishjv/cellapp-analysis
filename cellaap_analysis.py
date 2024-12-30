@@ -68,6 +68,8 @@ class analysis:
                         self.stacks[channel_name+"_background_map"] = imread(Path(name))
                         self.background_map_present = True
                         print(f"{name.name} used as {channel_name} background map")
+        else:
+            print(f"Opening {root_folder} in analysis mode.")
 
 
     def files(self, cellaap_dir: Path):

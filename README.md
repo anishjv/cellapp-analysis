@@ -2,13 +2,14 @@
 A python module to track cells and measure fluorescence and mitotic duration using cellapp inference files and raw fluorescence images. It runs trackpy on the instance segmentation file first, and then measures cell state (mitotic/non-mitotic) from the semantic segmentation and raw mean fluorescence value from the specific fluorescence channel. The module also summarizes the analysis by calculating the mean fluorescence for each cell ove4r the duration of mitosis, the total mitotic duration, and correction factors based on intensity and background correction maps (must be acquired using empty wells with DMEM and fluorobrite respectively).
 This analysis and summary are saved as separate excel spreadsheets.
 
-#Usage
+# Usage
 1. Specify the root folder (this folder must contain cellapp-generated inference folders and the raw intensity stacks.) This must be input as a Path.
 experiment1 = cellapp_analysis.analysis(Path(root_folder), analysis_only: False)
 If the boolean input is set true, the experiment1 object will look for and read in correction maps (if they are present; not used otherwise)
 
-2. ##Analysis_only mode##: One can create multiple objects corresponding to multiple repeats of an experiment.
+2. **Analysis_only mode**: One can create multiple objects corresponding to multiple repeats of an experiment.
 e.g., 
+
 experiment1 = cellapp_analysis.analysis(Path(root_folder_1), analysis_only: False)
 experiment2 = cellapp_analysis.analysis(Path(root_folder_2), analysis_only: False)
 
