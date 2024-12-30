@@ -18,7 +18,7 @@ import napari
 
 class analysis:
     
-    def __init__(self, root_folder: Path):
+    def __init__(self, root_folder: Path, analysis_only: False):
         '''
         Object initializes with default parameter values and definitions of 
         root and inference folders. It also reads in tif files with either 
@@ -49,24 +49,25 @@ class analysis:
         self.intensity_map_present = False
         self.background_map_present = False
         
-        for name in self.root_folder.glob("*_map.tif"):
-            map_type = name.name.split('_')[-2]
-            channel_name = name.name.split('_')[-3]
-            if channel_name == "Texas Red":
-                channel_name = "Texas_Red"
+        if not analysis_only:
+            for name in self.root_folder.glob("*_map.tif"):
+                map_type = name.name.split('_')[-2]
+                channel_name = name.name.split('_')[-3]
+                if channel_name == "Texas Red":
+                    channel_name = "Texas_Red"
 
-            match map_type:
-                case "intensity":
-                    self.paths["intensity_map"] = Path(name)
-                    self.stacks[channel_name + "_intensity_map"] = tifffile.imread(Path(name))
-                    self.intensity_map_present = True
-                    print(f"{name.name} used as {channel_name} intensity map")
+                match map_type:
+                    case "intensity":
+                        self.paths["intensity_map"] = Path(name)
+                        self.stacks[channel_name + "_intensity_map"] = tifffile.imread(Path(name))
+                        self.intensity_map_present = True
+                        print(f"{name.name} used as {channel_name} intensity map")
 
-                case "background":
-                    self.paths["background_map"] = Path(name)
-                    self.stacks[channel_name+"_background_map"] = imread(Path(name))
-                    self.background_map_present = True
-                    print(f"{name.name} used as {channel_name} background map")
+                    case "background":
+                        self.paths["background_map"] = Path(name)
+                        self.stacks[channel_name+"_background_map"] = imread(Path(name))
+                        self.background_map_present = True
+                        print(f"{name.name} used as {channel_name} background map")
 
 
     def files(self, cellaap_dir: Path):
@@ -521,7 +522,7 @@ class analysis:
         return self.summaryDF
     
     
-    def gather_plot_summaries(self, well_position: list):
+    def gather_plot_summaries(self, well_position: list) -> pd.DataFrame:
         '''
         Inputs:
         well_position : list with entries of the form r[A-Z][\d]+_+[a-z][\d+]
