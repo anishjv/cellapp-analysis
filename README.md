@@ -14,9 +14,9 @@ If the boolean input is set true, the experiment1 object will look for and read 
 e.g., 
 
 ```python
-experiment1 = cellapp_analysis.analysis(Path(root_folder_1), analysis_only: False)
+experiment1 = cellapp_analysis.analysis(Path(root_folder_1), analysis_only: True)
 
-experiment2 = cellapp_analysis.analysis(Path(root_folder_2), analysis_only: False)
+experiment2 = cellapp_analysis.analysis(Path(root_folder_2), analysis_only: True)
 ```
 
 In this mode, the module is used to compile all data corresponding to positions and wells belonging to the same treatment/cell line into one dataframe. e.g.,
