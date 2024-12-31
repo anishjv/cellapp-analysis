@@ -47,7 +47,7 @@ These correction maps are optional; analysis will progress without them.
 
 Step 1: Point the analysis object to a specific inference folder by providing a path to it. This will read the instance segmentation file from this folder. 
 
-Step 2: Use the **track_centroids** method; it will erode the instance segmentation with the default footprint (needs to be customized for different cells), track the resultant masks using trackpy, and then determine the cell-state by reading the semantic stack. The intermediate padas dataframe can be saved to excel using the flag.
+Step 2: Use the **track_centroids** method; it will erode the instance segmentation with the default footprint (needs to be customized for different cells), track the resultant masks using trackpy, and then determine the cell-state by reading the semantic stack. The intermediate padas dataframe can be saved to excel using the flag. Currently, the 'HeLa' input does not do anything; the plan is to use cell-line-specific parameters for trackpy (e.g., when some cells crawl around)
 
 Step 3: Use the **measure_signal** function to actually measure the fluorescence from the specified channel. The channel string must match the channel name in the file names. The "id = -1" will make the function measure data for all cells. Optionally, one can provide a list with cell numbers (development only).
 
@@ -56,7 +56,7 @@ Step 4: Use the **summarize_data** function to create the summary Excel file tha
 ```python
 exp_analysis.files(Path(to_inference_folder))
 exp_analysis.track_centroids('HeLa', False)
-tracks = exp_analysis.measure_signal('GFP', save_flag = True, id = -1)
+tracks = exp_analysis.measure_signal('GFP', save_flag = False, id = -1)
 tracks = exp_analysis.measure_signal('Texas_Red', save_flag = True, id = -1)
 summary = exp_analysis.summarize_data(True)
 ```
