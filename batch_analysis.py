@@ -10,21 +10,16 @@ sys.path.append('/Users/ajitj/Google Drive/ImageAnalysis/cell_analysis')
 import cellaap_analysis
 
 root_path = Path('/Volumes/cdb-Joglekar-Lab-GL/precious/20241212/Bub1 ppg1 ppg2 pps121/2024-12-12/20322/')
-t = cellaap_analysis.analysis(root_path)
 
-map_dict = {'GFP_background': Path("/Volumes/cdb-Joglekar-Lab-GL/precious/20241212/Bub1 ppg1 ppg2 pps121/2024-12-12/20322/20241212_Bub1 ppg1 ppg2 pps121_G01_s1_GFP.tif"),
-  'GFP_intensity' : Path("/Volumes/cdb-Joglekar-Lab-GL/precious/20241212/Bub1 ppg1 ppg2 pps121/2024-12-12/20322/20241212_Bub1 ppg1 ppg2 pps121_H01_s3_GFP.tif"), 
-  'TR_background': Path("/Volumes/cdb-Joglekar-Lab-GL/precious/20241212/Bub1 ppg1 ppg2 pps121/2024-12-12/20322/20241212_Bub1 ppg1 ppg2 pps121_G01_s1_Texas Red.tif"),
-  'TR_intensity':Path('/Volumes/cdb-Joglekar-Lab-GL/precious/20241212/Bub1 ppg1 ppg2 pps121/2024-12-12/20322/20241212_Bub1 ppg1 ppg2 pps121_H01_s3_Texas Red.tif')}
 # map_dict = {"GFP_background"      :'',
 #             "GFP_intensity"       :'',
 #             "TexasRed_background" :'',
 #             "TexasRed_intensity"  :''}
 
 # t.create_correction_maps(map_dict)
-
+t = cellaap_analysis.analysis(root_path, cell_type = "HT1080")
 inference_dirs = []
-for dir in root_path.glob('*inference'):
+for dir in root_path.glob('*F0*inference'):
     inference_dirs.append(dir)
 
 for dir in inference_dirs:
@@ -32,9 +27,9 @@ for dir in inference_dirs:
         delattr(t, 'summaryDF')
         delattr(t, 'tracked')
     t.files(dir)
-    t.track_centroids('HeLa', False)
+    t.track_centroids(False)
     # tracks = t.measure_signal('Texas Red', True, -1)
-    tracks = t.measure_signal('GFP', True, -1)
+    # tracks = t.measure_signal('GFP', True, -1)
     summary = t.summarize_data(True)
 
 
