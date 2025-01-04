@@ -205,24 +205,6 @@ class analysis:
             else:
                 print(f"Wrongly formatted dictionary; try again!")
 
-            # match key:
-
-            #     case "intensity":
-            #         intensity_map_name = value.parent / Path(value.stem + "_intensity_map.tif")
-            #         channel_map = value.stem.split('_')[-1] + "_intensity_map.tif"
-            #         self.stacks[channel_map] = self._gen_intensity_correction_map(imread(value))
-            #         tifffile.imsave(intensity_map_name, self.stacks[channel_map].astype(np.float16))
-            #         self.paths[channel_map] = intensity_map_name
-            #         print(f"Intensity map saved in the data dir. as {intensity_map_name}")
-                
-            #     case "background":
-            #         background_map_name = value.parent / Path(value.stem + "_background_map.tif")
-            #         channel_map = value.stem.split('_')[-1] + "_background_map.tif"
-            #         self.stacks[channel_map] = self._gen_background_correction_map(imread(value))
-            #         tifffile.imsave(background_map_name, self.stacks[channel_map].astype(np.int16))
-            #         self.paths[channel_map] = background_map_name
-            #         print(f"Background map saved in the data dir. as {background_map_name}")
-
         return
 
 
