@@ -4,17 +4,18 @@ import numpy.typing as npt
 from skimage.io import imread # type: ignore
 from skimage.morphology import erosion, disk
 from skimage.measure import regionprops_table, block_reduce
-from skimage.transform import rescale
-from skimage.filters import gaussian
+# from skimage.transform import rescale
+# from skimage.filters import gaussian
 import napari # type: ignore
 import numpy as np
 import pandas as pd
 import trackpy as tp
 import scipy.ndimage as ndi
-from scipy.signal import find_peaks, medfilt
+from scipy.signal import find_peaks
 # import matplotlib.pyplot as plt
 import napari
 from analysis_pars import analysis_pars
+from cellaap_utils import *
 
 
 class analysis:
@@ -472,27 +473,27 @@ class analysis:
                 
                 if Texas_Red_exists:
                     signal, bkg_corr, int_corr = self._calculate_signal(semantic, 
-                                                                        self.tracked[self.tracked.particle==id].Texas_Red.to_numpy(), 
-                                                                        self.tracked[self.tracked.particle==id].Texas_Red_bkg_corr.to_numpy(), 
-                                                                        self.tracked[self.tracked.particle==id].Texas_Red_int_corr.to_numpy())
+                                                                  self.tracked[self.tracked.particle==id].Texas_Red.to_numpy(), 
+                                                                  self.tracked[self.tracked.particle==id].Texas_Red_bkg_corr.to_numpy(), 
+                                                                  self.tracked[self.tracked.particle==id].Texas_Red_int_corr.to_numpy())
                     Texas_Red.append(signal)
                     Texas_Red_bkg_corr.append(bkg_corr)
                     Texas_Red_int_corr.append(int_corr)
                 
                 if GFP_exists:
                     signal, bkg_corr, int_corr = self._calculate_signal(semantic, 
-                                                                        self.tracked[self.tracked.particle==id].GFP.to_numpy(), 
-                                                                        self.tracked[self.tracked.particle==id].GFP_bkg_corr.to_numpy(), 
-                                                                        self.tracked[self.tracked.particle==id].GFP_int_corr.to_numpy())
+                                                                  self.tracked[self.tracked.particle==id].GFP.to_numpy(), 
+                                                                  self.tracked[self.tracked.particle==id].GFP_bkg_corr.to_numpy(), 
+                                                                  self.tracked[self.tracked.particle==id].GFP_int_corr.to_numpy())
                     GFP.append(signal)
                     GFP_bkg_corr.append(bkg_corr)
                     GFP_int_corr.append(int_corr)
                 
                 if Cy5_exists:
                     signal, bkg_corr, int_corr = self._calculate_signal(semantic, 
-                                                                        self.tracked[self.tracked.particle==id].Cy5.to_numpy(), 
-                                                                        self.tracked[self.tracked.particle==id].Cy5_bkg_corr.to_numpy(), 
-                                                                        self.tracked[self.tracked.particle==id].Cy5_int_cor.to_numpy())
+                                                                  self.tracked[self.tracked.particle==id].Cy5.to_numpy(), 
+                                                                  self.tracked[self.tracked.particle==id].Cy5_bkg_corr.to_numpy(), 
+                                                                  self.tracked[self.tracked.particle==id].Cy5_int_cor.to_numpy())
                     Cy5.append(signal)
                     Cy5_bkg_corr.append(bkg_corr)
                     Cy5_int_corr.append(int_corr)

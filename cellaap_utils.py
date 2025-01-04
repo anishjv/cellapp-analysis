@@ -1,15 +1,6 @@
-import sys, os
-from pathlib import Path
 import numpy.typing as npt
-from skimage.io import imread # type: ignore
-from skimage.morphology import erosion, disk
-from skimage.measure import regionprops_table, block_reduce
-from skimage.transform import rescale
 from skimage.filters import gaussian
-import napari # type: ignore
 import numpy as np
-import pandas as pd
-import trackpy as tp
 import scipy.ndimage as ndi
 from scipy.signal import medfilt
 
@@ -54,6 +45,7 @@ def gen_intensity_correction_map(image: npt.NDArray) -> npt.NDArray:
         intensity_map: npt.NDArray
     """
     mean_plane = projection(image, "average")
+    # med_filtered_mean_plane = ndi.median_filter(mean_plane, 9)
     smoothed_mean_plane = gaussian(mean_plane, 45)
     intensity_correction_map = smoothed_mean_plane / (np.max(smoothed_mean_plane))
 
@@ -75,12 +67,13 @@ def gen_background_correction_map(background_stack: npt.NDArray) -> npt.NDArray:
 
 def mean_signal_from_mask(img: npt.NDArray, mask: npt.NDArray):
     '''
+
     '''
     pixels = img[np.nonzero(mask)]
     if pixels.any():
         mean_signal = np.mean(pixels)
     else:
-        mean_signal = np.NAN
+        mean_signal = np.nan
 
     return mean_signal
 
@@ -91,9 +84,9 @@ def calculate_signal(semantic, signal, bkg_corr, int_corr):
     utility function for calculating signal from the given semantic, signal, and bkg traces
     '''
     # I also noticed that the signal goes up during metaphase. 
-    # THerefore, multiply the signal trace with the semantic label.
-    # in semantic, 100 = mitotic, 1 = non-mitotic
-    # semantic = (semantic - 1)/99
+        # THerefore, multiply the signal trace with the semantic label.
+        # in semantic, 100 = mitotic, 1 = non-mitotic
+        # semantic = (semantic - 1)/99
     semantic = medfilt(semantic, 3) # Need to add to the class
     semantic = (semantic - 1)/99
 
