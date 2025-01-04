@@ -157,7 +157,6 @@ class analysis:
             intensity_map: npt.NDArray
         """
         mean_plane = self._projection(image, "average")
-        # med_filtered_mean_plane = ndi.median_filter(mean_plane, 9)
         smoothed_mean_plane = gaussian(mean_plane, 45)
         intensity_correction_map = smoothed_mean_plane / (np.max(smoothed_mean_plane))
 
@@ -170,7 +169,7 @@ class analysis:
         '''
 
         background_correction_map = np.zeros_like(background_stack, dtype=int)
-        footprint = footprint=np.ones((3,3))
+        footprint = np.ones((3,3))
         for i in np.arange( background_stack.shape[0]):
             background_correction_map[i,:,:] = ndi.median_filter(background_stack[i,:,:], footprint=footprint)
 
@@ -251,7 +250,7 @@ class analysis:
             max_pixel_movement = self.defaults.max_pixel_movement
 
         self.tracked = tp.link(track_table, 
-                               self.defaults.max_pixel_movement, 
+                               max_pixel_movement, 
                                memory=memory)
         
         self.tracked = tp.filter_stubs(self.tracked, self.defaults.min_track_length) 
