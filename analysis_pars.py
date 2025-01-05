@@ -16,13 +16,16 @@ class analysis_pars:
         self.erode_footprint = disk(7)
         self.max_cell_size = 4000
         self.min_cell_size = 500
+
+        # Median filter size for smoothing semantic label trace
         self.min_mitotic_duration = 2 # Number of frames
         self.delta_t = 10 # default time step in min
 
-        # 5 - max. centroid movement between frames, memory - if the segmentation flickers
+        # trackpy parameters
         self.max_pixel_movement = 20
         self.tracking_memory    = 2
         self.min_track_length   = 10 # min track length
 
         if cell_type.lower() == "ht1080":
             self.max_pixel_movement = 60
+            self.max_cell_size = 5000
