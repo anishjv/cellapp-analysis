@@ -56,10 +56,11 @@ Step 4: Use the **summarize_data** function to create the summary Excel file tha
 Step 5: Use the **gather_plot_summaries** function to collect multiple wells and/or positions that represent the same experiment. The function requires a list as the input. Each entry in the list must be a string encoding the well and position identifier. Notice the capitalization and well number convention used in the example below. The output is a dataframe with an additional column for the well+position designation. In the future, one more column indicating the experiment will be added.
 
 ```python
-exp_analysis.files(Path(to_inference_folder))
-exp_analysis.track_centroids('HeLa', False)
+exp_analysis.files(Path(to_inference_folder), cell_type = "HeLa")
+exp_analysis.track_centroids(save_flag = False)
 tracks = exp_analysis.measure_signal('GFP', save_flag = False, id = -1)
 tracks = exp_analysis.measure_signal('Texas_Red', save_flag = True, id = -1)
+tracks = exp_analysis.measure_signal('Cy5', save_flag = True, id = -1) #if needed
 summary = exp_analysis.summarize_data(True)
 well_pos_list = ["A01_s1", "A12_s5", "B05_s3"]
 compiled_data = exp_analysis.gather_plot_summaries(well_pos_list)
