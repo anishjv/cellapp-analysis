@@ -53,13 +53,13 @@ class analysis:
                         self.paths["intensity_map"] = Path(name)
                         self.stacks[channel_name + "_intensity_map"] = tifffile.imread(Path(name))
                         self.intensity_map_present = True
-                        print(f"{name.name} used as {channel_name} intensity map")
+                        print(f"{name.name} used as the {channel_name} intensity map")
 
                     case "background":
                         self.paths["background_map"] = Path(name)
                         self.stacks[channel_name+"_background_map"] = imread(Path(name))
                         self.background_map_present = True
-                        print(f"{name.name} used as {channel_name} background map")
+                        print(f"{name.name} used as the {channel_name} background map")
         else:
             print(f"Opening {root_folder} in analysis mode.")
 
@@ -246,7 +246,13 @@ class analysis:
     
     def measure_signal(self, channel: str, save_flag: False, id = -1,):
         '''
-
+        Measures the average cell signal over the eroded cell masks. Also
+        calculates the position-dependent correction factors for background fluorescence and 
+        excitation intensity variation. 
+        Inputs:
+        channel   - Channel Name; must be one of: (phase, GFP, Texas_Red, Cy5)
+        save_flag - Whether to export dataframe as xlsx
+        id        - ID of the cell (assigned by trackpy); -1 will analyze all cells
         '''
         try:
             if channel in []:
@@ -329,8 +335,15 @@ class analysis:
     
     def summarize_data(self, save_flag: True):
         '''
-        Currently applying conservative filters to focus only on mitotic
-        cells with the expected pattern of inferred labels.
+        Summarizes data stored in the tracked dataframe; operates on all measured channels.
+        Filtering - Two strict filters are applies. Cell is summarized only if:
+                    * If the cell is labeled as mitotic in frame 0 or frame -1
+                    * If the label trace has only one peak
+        Inputs - 
+        save_flag : whether to export the data as an xlsx file
+
+        Outputs - 
+        None
         '''
         # Select only those tracks where mitosis was observed
         idlist    = list(set(self.tracked[self.tracked.mitotic==1].particle))
@@ -424,15 +437,18 @@ class analysis:
     
     def gather_plot_summaries(self, well_position: list) -> pd.DataFrame:
         '''
+        Collects and concatenates the summary xslx spreadsheets from the designated well_position list.
+        
         Inputs:
-        well_position : list with entries of the form r"[A-Z][\d\d]+_+[a-z][\d+]"
+        well_position : list with entries of the form r"[A-Z][dd]+_+[a-z][d+]"
+        Output: 
+        data_summary  : dataframe with the data concatenated; well_pos - column designating well_pos
         '''
         if well_position:
             if not hasattr(self, 'inf_folder_list'):
                 # Assemble the folder list when function called for the first time
                 self.inf_folder_list = [f for f in self.root_folder.glob('*_inference')]
             
-            # selected_dirs = []
             df_list = []
             for wp in well_position:
                 for f in self.inf_folder_list:
