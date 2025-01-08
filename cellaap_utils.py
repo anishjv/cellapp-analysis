@@ -3,6 +3,9 @@ from skimage.filters import gaussian
 import numpy as np
 import scipy.ndimage as ndi
 from scipy.signal import medfilt
+import pandas as pd
+from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
 
 
 def projection(im_array: np.ndarray, projection_type: str):
@@ -106,3 +109,60 @@ def calculate_signal(semantic, signal, bkg_corr, int_corr):
         int_corr = 1
 
     return signal, bkg_corr, int_corr
+
+
+def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size = None) -> (pd.DataFrame, dict): # type: ignore
+    '''
+    Function to fit the dose-response data with a 4-parameter sigmoid.
+    Bin range is determined by quantiles. Default is 0.025 and 0.85. The data
+    typically contain outliers on the high side, but not the low side. Hence the 
+    default values are aysmmetric.
+    Inputs:
+    xy_data        - dataframe w/ dose as the first column and response as 
+                     the second column
+    plot           - Boolean to enable plotting
+    quant_fraction - quantiles to determine bin range; 
+    bin_size       - size of each bin, default is 2.5 (empirical)
+    Outputs:
+    xy_data        - the input dataframe with bin labels added as a new column
+    fit_pars       - dictionary containing fit parameters
+    '''
+    if quant_fraction is None:
+        quant_fraction = [0.025, 0.85]
+    quants = np.round(xy_data.iloc[:,0].quantile(quant_fraction)).tolist()
+
+    # 
+    if bin_size is None:
+        bin_size = 2.5
+    bins   = np.arange(quants[0], quants[-1], bin_size)
+
+    labels, _ = pd.cut(xy_data.iloc[:, 0], bins, retbins=True)
+    xy_data["bins"] = labels
+
+    bin_means = xy_data.groupby("labels").mean()
+    # bin_stds  = xy_data.groupby("labels").std()
+    # bin_n     = xy_data.groupby("labels").count()
+
+    fits, _ = curve_fit(sigmoid_4par, bin_means.iloc[:,0], bin_means.iloc[:,-1], 
+                        p0 = [bin_means.iloc[:,1].min(), bin_means.iloc[:,1].max(), 
+                              5, (quants[0] + quants[-1])/ 4
+                             ]
+                       )
+
+    if plot:
+        plt.plot(bin_means.iloc[:,0], bin_means.iloc[:,1], 'ro')
+        plt.plot(xy_data.iloc[:,0], xy_data.iloc[:,1], 'r.')
+        plt.plot(bin_means.iloc[:,0], sigmoid_4par(bin_means.iloc[:,0],
+                                       fits[0], fits[1], fits[2], fits[3]), 'b-')
+    
+    fit_values = { 'min_duration' : fits[0],
+                   'max_duration' : fits[1],
+                   'Hill_exponent': fits[2],
+                   'EC50'         : fits[3]
+                 }
+    
+    return xy_data, fit_values
+
+def sigmoid_4par(x, base, top, exponent, ec50):
+
+    return base + (top - base)*(x**exponent)/(x**exponent+ec50**exponent)

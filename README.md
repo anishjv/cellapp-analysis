@@ -64,5 +64,3 @@ summary = exp_analysis.summarize_data(True)
 well_pos_list = ["A01_s1", "A12_s5", "B05_s3"]
 compiled_data = exp_analysis.gather_plot_summaries(well_pos_list)
 ```
-
-

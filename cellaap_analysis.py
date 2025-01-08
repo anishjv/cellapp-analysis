@@ -1,22 +1,16 @@
 import os, tifffile
 from pathlib import Path
-import numpy.typing as npt
 from skimage.io import imread # type: ignore
-from skimage.morphology import erosion, disk
+from skimage.morphology import erosion
 from skimage.measure import regionprops_table, block_reduce
-# from skimage.transform import rescale
-# from skimage.filters import gaussian
 import napari # type: ignore
 import numpy as np
 import pandas as pd
 import trackpy as tp
 import scipy.ndimage as ndi
 from scipy.signal import find_peaks
-# import matplotlib.pyplot as plt
-import napari
 from analysis_pars import analysis_pars
 from cellaap_utils import *
-
 
 class analysis:
     
@@ -117,63 +111,6 @@ class analysis:
         print(f"Finished computing zoomed and eroded instance mask!")
         return
     
-    # def _projection(self, im_array: np.ndarray, projection_type: str):
-
-    #     if im_array.shape[0] % 2 == 0:
-    #         center_index = im_array.shape[0] // 2 - 1
-    #     else:
-    #         center_index = im_array.shape[0] // 2
-
-    #     range = center_index // 2
-
-    #     try:
-    #         assert projection_type in ["max", "min", "average"]
-    #     except AssertionError:
-    #         print("Projection type was not valid, valid types include: max, min, mean")
-
-    #     if projection_type == "max":
-    #         projected_image = np.max(
-    #             im_array[center_index - range : center_index + range], axis=0
-    #         )
-    #     elif projection_type == "average":
-    #         projected_image = np.mean(
-    #             im_array[center_index - range : center_index + range], axis=0
-    #         )
-    #     elif projection_type == "min":
-    #         projected_image = np.min(
-    #             im_array[center_index - range : center_index + range], axis=0
-    #         )
-
-    #     return np.array(projected_image)
-    
-    # def _gen_intensity_correction_map(self, image: npt.NDArray) -> npt.NDArray:
-    #     """
-    #     From Anish
-    #     Computes the intensity map for flouresence microscopy intensity normalization if the input is a blank with flourescent media
-    #     ----------------------------------------------------------------------------------------------------------------------------
-    #     INPUTS:
-    #         image: npt.NDArray
-    #     OUTPUTPS:
-    #         intensity_map: npt.NDArray
-    #     """
-    #     mean_plane = self._projection(image, "average")
-    #     smoothed_mean_plane = gaussian(mean_plane, 45)
-    #     intensity_correction_map = smoothed_mean_plane / (np.max(smoothed_mean_plane))
-
-    #     return intensity_correction_map
-    
-    # def _gen_background_correction_map(self, background_stack: npt.NDArray) -> npt.NDArray:
-    #     '''
-    #     Newly written to avoid too much smoothing. The cMOS camera has a persistent noise pattern
-    #     therefore, it is better to keep the corrections local. 
-    #     '''
-
-    #     background_correction_map = np.zeros_like(background_stack, dtype=int)
-    #     footprint = np.ones((3,3))
-    #     for i in np.arange( background_stack.shape[0]):
-    #         background_correction_map[i,:,:] = ndi.median_filter(background_stack[i,:,:], footprint=footprint)
-
-    #     return background_correction_map
 
     def create_correction_maps(self, type_file_dict: dict):
         '''
@@ -306,17 +243,6 @@ class analysis:
 
         return self.viewer
 
-    # def _mean_signal_from_mask(self, img: npt.NDArray, mask: npt.NDArray):
-    #     '''
-
-    #     '''
-    #     pixels = img[np.nonzero(mask)]
-    #     if pixels.any():
-    #         mean_signal = np.mean(pixels)
-    #     else:
-    #         mean_signal = np.nan
-
-    #     return mean_signal
     
     def measure_signal(self, channel: str, save_flag: False, id = -1,):
         '''
@@ -400,33 +326,6 @@ class analysis:
 
         return self.tracked
     
-    # def _calculate_signal(self, semantic, signal, bkg_corr, int_corr):
-    #     '''
-    #     utility function for calculating signal from the given semantic, signal, and bkg traces
-    #     '''
-    #     # I also noticed that the signal goes up during metaphase. 
-    #         # THerefore, multiply the signal trace with the semantic label.
-    #         # in semantic, 100 = mitotic, 1 = non-mitotic
-    #         # semantic = (semantic - 1)/99
-    #     semantic = medfilt(semantic, 3) # Need to add to the class
-    #     semantic = (semantic - 1)/99
-
-    #     if signal.any():
-    #         signal = np.mean(signal[np.where(semantic)])
-    #     else:
-    #         signal = 0
-        
-    #     if bkg_corr.any():
-    #         bkg_corr = np.mean(bkg_corr[np.where(semantic)])
-    #     else:
-    #         bkg_corr = 0
-
-    #     if int_corr.any():
-    #         int_corr = np.mean(int_corr[np.where(semantic)])
-    #     else:
-    #         int_corr = 1
-
-    #     return signal, bkg_corr, int_corr
     
     def summarize_data(self, save_flag: True):
         '''
@@ -526,7 +425,7 @@ class analysis:
     def gather_plot_summaries(self, well_position: list) -> pd.DataFrame:
         '''
         Inputs:
-        well_position : list with entries of the form r[A-Z][\d]+_+[a-z][\d+]
+        well_position : list with entries of the form r"[A-Z][\d\d]+_+[a-z][\d+]"
         '''
         if well_position:
             if not hasattr(self, 'inf_folder_list'):

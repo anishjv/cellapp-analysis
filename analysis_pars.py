@@ -13,6 +13,7 @@ class analysis_pars:
         except:
             raise ValueError(f"Choose one of {self.cell_types}")
         
+        # Parameters for pre-processing inferred cell segmentations
         self.erode_footprint = disk(7)
         self.max_cell_size = 4000
         self.min_cell_size = 500
@@ -28,4 +29,12 @@ class analysis_pars:
 
         if cell_type.lower() == "ht1080":
             self.max_pixel_movement = 60
+            self.max_cell_size = 5000
+
+        if cell_type.lower() == "u2os":
+            self.max_pixel_movement = 40
+            self.max_cell_size = 5000
+
+        if cell_type.lower() == "rpe1":
+            self.max_pixel_movement = 40
             self.max_cell_size = 5000

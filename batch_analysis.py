@@ -24,8 +24,8 @@ for dir in root_path.glob('*F0*inference'):
 
 for dir in inference_dirs:
     if hasattr(t, 'summaryDF'):
-        delattr(t, 'summaryDF')
-        delattr(t, 'tracked')
+       delattr(t, 'summaryDF')
+       delattr(t, 'tracked')
     t.files(dir)
     t.track_centroids(False)
     # tracks = t.measure_signal('Texas Red', True, -1)
