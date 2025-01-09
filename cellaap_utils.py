@@ -116,7 +116,10 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
     Function to fit the dose-response data with a 4-parameter sigmoid.
     Bin range is determined by quantiles. Default is 0.025 and 0.85. The data
     typically contain outliers on the high side, but not the low side. Hence the 
-    default values are aysmmetric.
+    default values are aysmmetric. For the model to be applicable, the fluorescence 
+    signal must be background subtracted. A simple method is to subtract the smallest
+    signal value from all values.
+    
     Inputs:
     xy_data        - dataframe w/ dose as the first column and response as 
                      the second column
@@ -134,25 +137,24 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
     # 
     if bin_size is None:
         bin_size = 2.5
-    bins   = np.arange(quants[0], quants[-1], bin_size)
+    bins   = np.arange(quants[0], 1.3*quants[-1], bin_size)
 
     labels, _ = pd.cut(xy_data.iloc[:, 0], bins, retbins=True)
     xy_data["bins"] = labels
 
-    bin_means = xy_data.groupby("labels").mean()
-    # bin_stds  = xy_data.groupby("labels").std()
-    # bin_n     = xy_data.groupby("labels").count()
+    bin_means = xy_data.groupby("bins").mean()
 
     fits, _ = curve_fit(sigmoid_4par, bin_means.iloc[:,0], bin_means.iloc[:,-1], 
                         p0 = [bin_means.iloc[:,1].min(), bin_means.iloc[:,1].max(), 
                               5, (quants[0] + quants[-1])/ 4
-                             ]
+                             ],
+                        maxfev = 10000
                        )
 
     if plot:
-        plt.plot(bin_means.iloc[:,0], bin_means.iloc[:,1], 'ro')
         plt.plot(xy_data.iloc[:,0], xy_data.iloc[:,1], 'r.')
-        plt.plot(bin_means.iloc[:,0], sigmoid_4par(bin_means.iloc[:,0],
+        plt.plot(bin_means.iloc[:,0], bin_means.iloc[:,1], 'bo')
+        plt.plot(np.arange(0,1.5*quants[-1]), sigmoid_4par(np.arange(0,1.5*quants[-1]),
                                        fits[0], fits[1], fits[2], fits[3]), 'b-')
     
     fit_values = { 'min_duration' : fits[0],
@@ -161,7 +163,7 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
                    'EC50'         : fits[3]
                  }
     
-    return xy_data, fit_values
+    return xy_data, bin_means, fit_values
 
 def sigmoid_4par(x, base, top, exponent, ec50):
 
