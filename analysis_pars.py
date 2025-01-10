@@ -28,8 +28,9 @@ class analysis_pars:
         self.min_track_length   = 10 # min track length
 
         if cell_type.lower() == "ht1080":
-            self.max_pixel_movement = 50
+            self.max_pixel_movement = 40
             self.max_cell_size = 5000
+            self.adaptive_tracking = True
 
         if cell_type.lower() == "u2os":
             self.max_pixel_movement = 30
@@ -38,3 +39,4 @@ class analysis_pars:
         if cell_type.lower() == "rpe1":
             self.max_pixel_movement = 30
             self.max_cell_size = 5000
+            self.adaptive_tracking = True

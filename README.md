@@ -1,17 +1,19 @@
 # cellapp-analysis module
+
 A python module to track cells and measure fluorescence and mitotic duration using cellapp inference files and raw fluorescence images. It runs trackpy on the instance segmentation file first, and then measures cell state (mitotic/non-mitotic) from the semantic segmentation and raw mean fluorescence value from the specific fluorescence channel. The module also summarizes the analysis by calculating the mean fluorescence for each cell ove4r the duration of mitosis, the total mitotic duration, and correction factors based on intensity and background correction maps (must be acquired using empty wells with DMEM and fluorobrite respectively).
 This analysis and summary are saved as separate excel spreadsheets.
 
 ## Usage
+
 1. Specify the root folder (this folder must contain cellapp-generated inference folders and the raw intensity stacks.) This must be input as a Path.
 
 ```python
 experiment1 = cellapp_analysis.analysis(Path(root_folder), analysis_only: False)
 ```
-If the boolean input is set true, the experiment1 object will look for and read in correction maps (if they are present; not used otherwise)
 
-2. **Analysis mode**: One can create multiple objects corresponding to multiple repeats of an experiment.
-e.g., 
+If the boolean input is set true, the experiment1 object will look for and read in correction maps (if they are present; not used otherwise). Otherwise, the object waits for the path to a root_folder containing cellapp inference folders.
+
+2.**Analysis mode**: One can create multiple objects corresponding to multiple repeats of an experiment. e.g.,
 
 ```python
 experiment1 = cellapp_analysis.analysis(Path(root_folder_1), analysis_only: True)
@@ -26,7 +28,7 @@ HeLa_wells = ["A02_s1", "H12_s5"] # Note the exact formant (\W\d+_s\d)
 HeLa_data = experiment1.gather_plot_summaries(HeLa_wells)  
 ```
 
-3. **Measurement mode**: Set the analysis_only mode to False. With this, analysis object instatiation will detect image stacks with either "channel_background" and "channel_intensity" in the filename. 
+3.**Measurement mode**: Set the analysis_only mode to False. With this, analysis object instatiation will detect image stacks with either "channel_background" and "channel_intensity" in the filename.
 
 ```python
 exp_analysis = cellaap_analysis.analysis(Path(root_folder), False)
@@ -45,7 +47,19 @@ exp_analysis.create_correction_maps(map_dict)
 
 These correction maps are optional; analysis will progress without them.
 
-Step 1: Point the analysis object to a specific inference folder by providing a path to it. This will read the instance segmentation file from this folder. 
+**A note about default analysis parameters:**
+These are set by the **analysis_pars** class. If necessary, you can change them to achieve satisfactory results. These are stored in the self.defaults object and can be reset as such. Some of the tracking parameters can be changed on the fly; refer to the self.tracking function for details.
+
+The main parameters relate to trackpy configuration:
+
+1. max_cell_size = 5000 (pixels) - larger segments are filtered out. This needs to be changed for large cells or cells that tend to spread out.
+2. max_pixel_movement (pixels) - the search radius for trackpy. Depends on whether or not the cells crawl. It's set at 20 pixels for Hela, 30 for U2OS/RPE1, and 50 for RPE1.
+3. adaptive_tracking (T/F) - Enabled to reduce the chances of trackpy optimization crashing through some combination of a large search raidus and cell density.
+4. min_track_length = 10: Only cells tracked for > 10 timepoints are analyzed.
+5. memory = 2: tracking memory in timepoints
+6. min_mitotic_duration = 2: (unrelated to trackpy); mitotic events smaller than 2 timepoints are filtered out.
+
+Step 1: Point the analysis object to a specific inference folder by providing a path to it. This will read the instance segmentation file from this folder.
 
 Step 2: Use the **track_centroids** method; it will erode the instance segmentation with the default footprint (needs to be customized for different cells), track the resultant masks using trackpy, and then determine the cell-state by reading the semantic stack. The intermediate padas dataframe can be saved to excel using the flag. Currently, the 'HeLa' input does not do anything; the plan is to use cell-line-specific parameters for trackpy (e.g., when some cells crawl around)
 
@@ -55,8 +69,11 @@ Step 4: Use the **summarize_data** function to create the summary Excel file tha
 
 Step 5: Use the **gather_plot_summaries** function to collect multiple wells and/or positions that represent the same experiment. The function requires a list as the input. Each entry in the list must be a string encoding the well and position identifier. Notice the capitalization and well number convention used in the example below. The output is a dataframe with an additional column for the well+position designation. In the future, one more column indicating the experiment will be added.
 
-Step 6: Use the **fit_model** function to fit a 4-parameter sigmoid to binned data. The function expects input data as a dataframe with the first column containing the fluorescence signal and the second column containing the time in mitosis. For this model to work, the 0 dosage response must be defined as a positive value. This value must be obtained from a -rapamycin well or otherwise supplied. If it is unavailable, perform a rough background subtraction as shown below on a temporary basis.
-quant_fraction must a list that specifies the quantiles to be evaluated for the dosage. The bin range is based on the quantile values of the dosage values. Remember that the eSAC dosage distribution is asymmetric (it should be possible to fit it with a log-normal distribution). Therefore, the default quantile values (used below) are asymmetric. bin_size is arbitrarily defined and can also be adjusted if necessary. Don't use lower values (the default shown below is empirically defined).
+Step 6: Use the **fit_model** function to fit a 4-parameter Hill model to binned data. The function expects input data as a dataframe with the first column containing the fluorescence signal and the second column containing the time in mitosis. For this model to work, the 0 dosage response must be defined as a positive value. This value must be obtained from a -rapamycin well or otherwise supplied. If it is unavailable, perform a rough background subtraction as shown below on a temporary basis.
+
+quant_fraction must a list that specifies the quantiles to be evaluated for the dosage. The bin range is based on the quantile values of the dosage values. Remember that the eSAC dosage distribution is asymmetric (it should be possible to fit it with a log-normal distribution). Therefore, the default quantile values (used below) are asymmetric.
+
+bin_size is arbitrarily defined and can also be adjusted if necessary. Don't use lower values (the default shown below is empirically defined).
 
 ```python
 exp_analysis.files(Path(to_inference_folder), cell_type = "HeLa")

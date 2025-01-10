@@ -16,22 +16,22 @@ root_path = Path('')
 #             "TexasRed_background" :'',
 #             "TexasRed_intensity"  :''}
 
-
+root_path = Path('/Users/ajitj/Desktop/RPE1-U2OS')
 t = cellaap_analysis.analysis(root_path, analysis_only = False)
 # t.create_correction_maps(map_dict)
 inference_dirs = []
-for dir in root_path.glob('*F0*inference'):
+for dir in root_path.glob('*A04_s1*inference'):
     inference_dirs.append(dir)
 
 for dir in inference_dirs:
     if hasattr(t, 'summaryDF'):
        delattr(t, 'summaryDF')
        delattr(t, 'tracked')
-    t.files(dir, cell_type = 'ht1080')
-    t.track_centroids(False)
+    t.files(dir, cell_type = 'rpe1')
+    tracks = t.track_centroids(False)
     # tracks = t.measure_signal('Texas Red', True, -1)
     # tracks = t.measure_signal('GFP', True, -1)
-    summary = t.summarize_data(True)
+    # summary = t.summarize_data(True)
 
 
 # folder_path = Path('/Users/ajitj/Desktop/current/20241205_Bub1 ppg1 ppg2 pps121_F12_s3_phs_HeLa_2000_0.25_inference')

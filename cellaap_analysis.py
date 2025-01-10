@@ -140,7 +140,7 @@ class analysis:
                     print(f"Background map saved in the data dir. as {background_map_name}")
             
             else:
-                print(f"Wrongly formatted dictionary; try again!")
+                print(f"Dictionary values must be Path objects; try again.")
 
         return
 
@@ -186,9 +186,13 @@ class analysis:
         if max_pixel_movement is None:
             max_pixel_movement = self.defaults.max_pixel_movement
 
-        self.tracked = tp.link(track_table, 
-                               max_pixel_movement, 
+        # Adaptive linking for cells that move a lot between two timesteps
+        if self.defaults.adaptive_tracking:
+            self.tracked = tp.link(track_table, 
+                               max_pixel_movement, adaptive_stop=10, adaptive_step=0.9,
                                memory=memory)
+        else:
+            self.tracked = tp.link(track_table, max_pixel_movement, memory=memory)
         
         self.tracked = tp.filter_stubs(self.tracked, self.defaults.min_track_length) 
         
