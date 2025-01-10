@@ -17,7 +17,7 @@ root_path = Path('/Volumes/cdb-Joglekar-Lab-GL/precious/20241212/Bub1 ppg1 ppg2 
 #             "TexasRed_intensity"  :''}
 
 # t.create_correction_maps(map_dict)
-t = cellaap_analysis.analysis(root_path, cell_type = "HT1080")
+t = cellaap_analysis.analysis(root_path, analysis_only = False)
 inference_dirs = []
 for dir in root_path.glob('*F0*inference'):
     inference_dirs.append(dir)
@@ -26,7 +26,7 @@ for dir in inference_dirs:
     if hasattr(t, 'summaryDF'):
        delattr(t, 'summaryDF')
        delattr(t, 'tracked')
-    t.files(dir)
+    t.files(dir, cell_type = 'ht1080')
     t.track_centroids(False)
     # tracks = t.measure_signal('Texas Red', True, -1)
     # tracks = t.measure_signal('GFP', True, -1)
