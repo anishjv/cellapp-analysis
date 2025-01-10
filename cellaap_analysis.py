@@ -1,5 +1,5 @@
 import os, tifffile
-from pathlib import Path
+from pathlib import Path, PosixPath
 from skimage.io import imread # type: ignore
 from skimage.morphology import erosion
 from skimage.measure import regionprops_table, block_reduce
@@ -122,7 +122,7 @@ class analysis:
         '''
 
         for key, value in type_file_dict.items():
-            if type(value) is Path:
+            if type(value) is PosixPath:
                 if "intensity" in key:
                     intensity_map_name = value.parent / Path(value.stem + "_intensity_map.tif")
                     channel_map = value.stem.split('_')[-1] + "_intensity_map.tif"
