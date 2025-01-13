@@ -457,10 +457,14 @@ class analysis:
             for wp in well_position:
                 for f in self.inf_folder_list:
                     if wp in f.name:
-                        xls_file_name = [file for file in f.glob('*_summary.xlsx')] 
-                        df = pd.read_excel(xls_file_name[0]) #assumes only one
-                        df["well_pos"] = wp #assign well-position identifier
-                        df_list.append(df)
+                        xls_file_name = [file for file in f.glob('*_summary.xlsx')]
+                        if xls_file_name:
+                            df = pd.read_excel(xls_file_name[0]) #assumes only one
+                            df["well_pos"] = wp #assign well-position identifier
+                            df_list.append(df)
+                            print(f"{wp} loaded")
+                        else:
+                            print(f"No summary file found in {wp}")
 
             data_summary = pd.concat(df_list)
 

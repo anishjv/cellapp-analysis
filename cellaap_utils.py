@@ -143,7 +143,8 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
     xy_data["bins"] = labels
 
     bin_means = xy_data.groupby("bins").mean()
-
+    bin_means.dropna(inplace=True) # Some of the bins may not have any data
+    
     fits, _ = curve_fit(sigmoid_4par, bin_means.iloc[:,0], bin_means.iloc[:,-1], 
                         p0 = [bin_means.iloc[:,1].min(), bin_means.iloc[:,1].max(), 
                               5, (quants[0] + quants[-1])/ 4
