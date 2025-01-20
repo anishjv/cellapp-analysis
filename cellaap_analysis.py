@@ -230,16 +230,19 @@ class analysis:
 
         return self.tracked
     
-    def _display_tracks(self):
+    def _display_tracks(self, img_stack = None):
         '''
         '''
         if "viewer" not in self.__dict__.keys():
             self.viewer = napari.Viewer()
         
-        self.stacks["phase"] = imread(self.paths["phase"])
-        phase_binned = np.zeros_like(self.stacks["instance"], dtype=int)
-        for i in np.arange(phase_binned.shape[0]):
-            phase_binned[i,:,:]=block_reduce(self.stacks["phase"][i,:,:,],block_size=(2,2), func=np.max)
+        if img_stack is None:
+            self.stacks["phase"] = imread(self.paths["phase"])
+            phase_binned = np.zeros_like(self.stacks["instance"], dtype=int)
+            for i in np.arange(phase_binned.shape[0]):
+                phase_binned[i,:,:]=block_reduce(self.stacks["phase"][i,:,:,],block_size=(2,2), func=np.max)
+        else:
+            pass
 
         self.viewer.add_image(phase_binned)
         self.viewer.add_labels(self.stacks["semantic"])
@@ -454,6 +457,7 @@ class analysis:
                 self.inf_folder_list = [f for f in self.root_folder.glob('*_inference')]
             
             df_list = []
+            experiment = self.root_folder.parents[-1]
             for wp in well_position:
                 for f in self.inf_folder_list:
                     if wp in f.name:
@@ -461,6 +465,7 @@ class analysis:
                         if xls_file_name:
                             df = pd.read_excel(xls_file_name[0]) #assumes only one
                             df["well_pos"] = wp #assign well-position identifier
+                            df["experiment"] = experiment
                             df_list.append(df)
                             print(f"{wp} loaded")
                         else:
