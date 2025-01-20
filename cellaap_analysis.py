@@ -1,5 +1,5 @@
 import os, tifffile
-from pathlib import Path, PosixPath
+from pathlib import Path, PosixPath, WindowsPath
 from skimage.io import imread # type: ignore
 from skimage.morphology import erosion
 from skimage.measure import regionprops_table, block_reduce
@@ -76,7 +76,7 @@ class analysis:
             self.paths["instance"] = Path([name for name in cellaap_dir.glob('*.tif') if "instance" in name.name][0])
             self.paths["semantic"] = Path([name for name in cellaap_dir.glob('*.tif') if "semantic" in name.name][0])
             # Keep the name stub to infer other file names
-            self.name_stub = self.paths["instance"].name.split('_phs')[0]
+            self.name_stub = self.paths["instance"].name.split('_instance')[0]
             self.defaults = analysis_pars(cell_type=cell_type)
         except:
             raise ValueError("Instance and/or semantic segmentations not found!")
@@ -122,7 +122,7 @@ class analysis:
         '''
 
         for key, value in type_file_dict.items():
-            if type(value) is PosixPath:
+            if type(value) is PosixPath or WindowsPath:
                 if "intensity" in key:
                     intensity_map_name = value.parent / Path(value.stem + "_intensity_map.tif")
                     channel_map = value.stem.split('_')[-1] + "_intensity_map.tif"
@@ -363,18 +363,27 @@ class analysis:
         if "GFP" in self.tracked.columns:
             GFP_exists = True
             GFP = []
+            GFP_std = []
             GFP_bkg_corr = []
+            GFP_bkg_corr_std = []
             GFP_int_corr = []
+            GFP_int_corr_std = []
         if "Texas_Red" in self.tracked.columns:
             Texas_Red_exists = True
             Texas_Red = []
+            Texas_Red_std = []
             Texas_Red_bkg_corr = []
+            Texas_Red_bkg_corr_std = []
             Texas_Red_int_corr = []
+            Texas_Red_int_corr_std = []
         if "Cy5" in self.tracked.columns:
             Cy5_exists = True
             Cy5 = []
+            Cy5_std = []
             Cy5_bkg_corr = []
+            Cy5_bkg_corr_std = []
             Cy5_int_corr = []
+            Cy5_int_corr_std = []
 
         for id in idlist:
             semantic = self.tracked[self.tracked.particle==id].semantic
@@ -389,31 +398,40 @@ class analysis:
                 particle.append(id)
                 
                 if Texas_Red_exists:
-                    signal, bkg_corr, int_corr = calculate_signal(semantic, 
+                    signal, bkg_corr, int_corr, signal_std, bkg_std, int_std = calculate_signal(semantic, 
                                                                   self.tracked[self.tracked.particle==id].Texas_Red.to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id].Texas_Red_bkg_corr.to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id].Texas_Red_int_corr.to_numpy())
                     Texas_Red.append(signal)
+                    Texas_Red_std.append(signal_std)
                     Texas_Red_bkg_corr.append(bkg_corr)
+                    Texas_Red_bkg_corr_std.append(bkg_std)
                     Texas_Red_int_corr.append(int_corr)
+                    Texas_Red_int_corr_std.append(int_std)
                 
                 if GFP_exists:
-                    signal, bkg_corr, int_corr = calculate_signal(semantic, 
+                    signal, bkg_corr, int_corr, signal_std, bkg_std, int_std = calculate_signal(semantic, 
                                                                   self.tracked[self.tracked.particle==id].GFP.to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id].GFP_bkg_corr.to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id].GFP_int_corr.to_numpy())
                     GFP.append(signal)
+                    GFP_std.append(signal_std)
                     GFP_bkg_corr.append(bkg_corr)
+                    GFP_bkg_corr_std.append(bkg_std)
                     GFP_int_corr.append(int_corr)
+                    GFP_int_corr_std.append(int_std)
                 
                 if Cy5_exists:
-                    signal, bkg_corr, int_corr = calculate_signal(semantic, 
+                    signal, bkg_corr, int_corr, signal_std, bkg_std, int_std = calculate_signal(semantic, 
                                                                   self.tracked[self.tracked.particle==id].Cy5.to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id].Cy5_bkg_corr.to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id].Cy5_int_cor.to_numpy())
                     Cy5.append(signal)
+                    Cy5_std.append(signal_std)
                     Cy5_bkg_corr.append(bkg_corr)
+                    Cy5_bkg_corr_std.append(bkg_std)
                     Cy5_int_corr.append(int_corr)
+                    Cy5_int_corr_std.append(int_std)
         
         # Construct summary DF
         self.summaryDF = pd.DataFrame({"particle"  : particle,
@@ -424,14 +442,23 @@ class analysis:
             self.summaryDF["GFP"] = GFP
             self.summaryDF["GFP_bkg_corr"] = GFP_bkg_corr
             self.summaryDF["GFP_int_corr"] = GFP_int_corr
+            self.summaryDF["GFP_std"] = GFP_std
+            self.summaryDF["GFP_bkg_corr_std"] = GFP_bkg_corr_std
+            self.summaryDF["GFP_int_corr_std"] = GFP_int_corr_std
         if Texas_Red_exists:
             self.summaryDF["Texas_Red"] = Texas_Red
             self.summaryDF["Texas_Red_corr"] = Texas_Red_bkg_corr
             self.summaryDF["Texas_Red_int_corr"] = Texas_Red_int_corr
+            self.summaryDF["Texas_Red_std"] = Texas_Red_std
+            self.summaryDF["Texas_Red_bkg_corr_std"] = Texas_Red_bkg_corr_std
+            self.summaryDF["Texas_Red_int_corr_std"] = Texas_Red_int_corr_std
         if Cy5_exists:
             self.summaryDF["Cy5"] = Cy5
             self.summaryDF["Cy5_bkg_corr"] = Cy5_bkg_corr
             self.summaryDF["Cy5_int_corr"] = Cy5_int_corr
+            self.summaryDF["Cy5_std"] = Cy5_std
+            self.summaryDF["Cy5_bkg_corr_std"] = Cy5_bkg_corr_std
+            self.summaryDF["Cy5_int_corr_std"] = Cy5_int_corr_std
 
         if save_flag:
             self.summaryDF.to_excel(self.cellaap_dir / Path(self.name_stub+"_summary.xlsx"))
