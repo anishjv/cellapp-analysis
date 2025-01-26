@@ -1,7 +1,8 @@
 import os, tifffile
-from pathlib import Path, PosixPath
+from pathlib import Path, PurePath
 from skimage.io import imread # type: ignore
 from skimage.morphology import erosion
+from skimage.filters.rank import minimum
 from skimage.measure import regionprops_table, block_reduce
 import napari # type: ignore
 import numpy as np
@@ -11,10 +12,11 @@ import scipy.ndimage as ndi
 from scipy.signal import find_peaks
 from analysis_pars import analysis_pars
 from cellaap_utils import *
+from skimage.util import img_as_uint
 
 class analysis:
     
-    def __init__(self, root_folder: Path, analysis_only: False):
+    def __init__(self, root_folder: Path, plotting_only: False):
         '''
         Object initializes with default parameter values and definitions of 
         root and inference folders. It also reads in tif files with either 
@@ -29,6 +31,11 @@ class analysis:
         self.stacks = {} # Dictionary stores image stacks
 
         ##
+        try:
+            root_folder.exists()
+        except:
+            raise ValueError(f"{root_folder} not a valid path")
+        
         self.root_folder = root_folder
         self.inference_folders = [] # list of folders with _inference in their names
         for directory in os.scandir(root_folder):
@@ -41,7 +48,7 @@ class analysis:
         self.intensity_map_present = False
         self.background_map_present = False
         
-        if not analysis_only:
+        if not plotting_only:
             for name in self.root_folder.glob("*_map.tif"):
                 map_type = name.name.split('_')[-2]
                 channel_name = name.name.split('_')[-3]
@@ -61,7 +68,7 @@ class analysis:
                         self.background_map_present = True
                         print(f"{name.name} used as the {channel_name} background map")
         else:
-            print(f"Opening {root_folder} in analysis mode.")
+            print(f"Opening {root_folder} in plotting only mode.")
 
 
     def files(self, cellaap_dir: Path, cell_type: str):
@@ -104,7 +111,8 @@ class analysis:
         instance_zoomed = np.zeros((instance_shape[0], instance_shape[1]*2, instance_shape[2]*2))
         print(f"Computing zoomed and eroded instance mask...")
         for i in np.arange(instance_shape[0]):
-            pre_zoom = erosion(self.stacks["instance"][i,:,:],self.defaults.erode_footprint)
+            pre_zoom = minimum(self.stacks["instance"][i,:,:].astype(np.uint16),
+                               self.defaults.erode_footprint)
             instance_zoomed[i, :, :] = ndi.zoom(pre_zoom, 2, order=0)
             
         self.stacks["instance_zoomed"] = instance_zoomed
@@ -122,7 +130,7 @@ class analysis:
         '''
 
         for key, value in type_file_dict.items():
-            if type(value) is PosixPath:
+            if type(value) is PurePath:
                 if "intensity" in key:
                     intensity_map_name = value.parent / Path(value.stem + "_intensity_map.tif")
                     channel_map = value.stem.split('_')[-1] + "_intensity_map.tif"
@@ -395,7 +403,8 @@ class analysis:
                     signal, bkg_corr, int_corr = calculate_signal(semantic, 
                                                                   self.tracked[self.tracked.particle==id].Texas_Red.to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id].Texas_Red_bkg_corr.to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id].Texas_Red_int_corr.to_numpy())
+                                                                  self.tracked[self.tracked.particle==id].Texas_Red_int_corr.to_numpy(),
+                                                                  self.defaults.min_width)
                     Texas_Red.append(signal)
                     Texas_Red_bkg_corr.append(bkg_corr)
                     Texas_Red_int_corr.append(int_corr)
@@ -404,7 +413,8 @@ class analysis:
                     signal, bkg_corr, int_corr = calculate_signal(semantic, 
                                                                   self.tracked[self.tracked.particle==id].GFP.to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id].GFP_bkg_corr.to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id].GFP_int_corr.to_numpy())
+                                                                  self.tracked[self.tracked.particle==id].GFP_int_corr.to_numpy(),
+                                                                  self.defaults.min_width)
                     GFP.append(signal)
                     GFP_bkg_corr.append(bkg_corr)
                     GFP_int_corr.append(int_corr)
@@ -413,7 +423,8 @@ class analysis:
                     signal, bkg_corr, int_corr = calculate_signal(semantic, 
                                                                   self.tracked[self.tracked.particle==id].Cy5.to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id].Cy5_bkg_corr.to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id].Cy5_int_cor.to_numpy())
+                                                                  self.tracked[self.tracked.particle==id].Cy5_int_cor.to_numpy(),
+                                                                  self.defaults.min_width)
                     Cy5.append(signal)
                     Cy5_bkg_corr.append(bkg_corr)
                     Cy5_int_corr.append(int_corr)

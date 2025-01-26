@@ -6,21 +6,19 @@ import matplotlib.pyplot as plt
 plt.ion()
 import napari
 # sys.path.append('/Users/ajitj/Library/CloudStorage/GoogleDrive-ajitj@umich.edu/My Drive/ImageAnalysis/cell_analysis')
-sys.path.append('/Users/ajitj/Google Drive/ImageAnalysis/cell_analysis')
+sys.path.append('//Users/ajitj/Google Drive/ImageAnalysis/cellapp-analysis')
 import cellaap_analysis
-
-root_path = Path('')
 
 # map_dict = {"GFP_background"      :'',
 #             "GFP_intensity"       :'',
 #             "TexasRed_background" :'',
 #             "TexasRed_intensity"  :''}
 
-root_path = Path('/Users/ajitj/Desktop/RPE1-U2OS')
+root_path = Path('/Volumes/SharedHITSX/cdb-Joglekar-Lab-GL/Soubhagyalaxmi_Jema/20250116/BubR1-overexpression/2025-01-17/20333')
 t = cellaap_analysis.analysis(root_path, analysis_only = False)
 # t.create_correction_maps(map_dict)
 inference_dirs = []
-for dir in root_path.glob('*A04_s1*inference'):
+for dir in root_path.glob('*inference'):
     inference_dirs.append(dir)
 
 for dir in inference_dirs:
@@ -29,9 +27,9 @@ for dir in inference_dirs:
        delattr(t, 'tracked')
     t.files(dir, cell_type = 'rpe1')
     tracks = t.track_centroids(False)
-    # tracks = t.measure_signal('Texas Red', True, -1)
-    # tracks = t.measure_signal('GFP', True, -1)
-    # summary = t.summarize_data(True)
+    tracks = t.measure_signal('Texas Red', True, -1)
+    tracks = t.measure_signal('GFP', True, -1)
+    summary = t.summarize_data(True)
 
 
 # folder_path = Path('/Users/ajitj/Desktop/current/20241205_Bub1 ppg1 ppg2 pps121_F12_s3_phs_HeLa_2000_0.25_inference')
