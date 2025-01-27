@@ -8,17 +8,17 @@ This analysis and summary are saved as separate excel spreadsheets.
 1. Specify the root folder (this folder must contain cellapp-generated inference folders and the raw intensity stacks.) This must be input as a Path.
 
 ```python
-experiment1 = cellapp_analysis.analysis(Path(root_folder), analysis_only: False)
+experiment1 = cellapp_analysis.analysis(Path(root_folder), plotting_only: False)
 ```
 
 If the boolean input is set true, the experiment1 object will look for and read in correction maps (if they are present; not used otherwise). Otherwise, the object waits for the path to a root_folder containing cellapp inference folders.
 
-2.**Analysis mode**: One can create multiple objects corresponding to multiple repeats of an experiment. e.g.,
+2.**Plotting mode**: One can create multiple objects corresponding to multiple repeats of an experiment. e.g.,
 
 ```python
-experiment1 = cellapp_analysis.analysis(Path(root_folder_1), analysis_only: True)
+experiment1 = cellapp_analysis.analysis(Path(root_folder_1), plotting_only: True)
 
-experiment2 = cellapp_analysis.analysis(Path(root_folder_2), analysis_only: True)
+experiment2 = cellapp_analysis.analysis(Path(root_folder_2), plotting_only: True)
 ```
 
 In this mode, the module is used to compile all data corresponding to positions and wells belonging to the same treatment/cell line into one dataframe. e.g.,
@@ -28,7 +28,7 @@ HeLa_wells = ["A02_s1", "H12_s5"] # Note the exact formant (\W\d+_s\d)
 HeLa_data = experiment1.gather_plot_summaries(HeLa_wells)  
 ```
 
-3.**Measurement mode**: Set the analysis_only mode to False. With this, analysis object instatiation will detect image stacks with either "channel_background" and "channel_intensity" in the filename.
+3.**Measurement mode**: Set the plotting_only mode to False. With this, analysis object instatiation will detect image stacks with either "channel_background" and "channel_intensity" in the filename.
 
 ```python
 exp_analysis = cellaap_analysis.analysis(Path(root_folder), False)

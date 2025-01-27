@@ -82,7 +82,7 @@ def mean_signal_from_mask(img: npt.NDArray, mask: npt.NDArray):
 
 
 
-def calculate_signal(semantic, signal, bkg_corr, int_corr):
+def calculate_signal(semantic, signal, bkg_corr, int_corr, min_width):
     '''
     utility function for calculating signal from the given semantic, signal, and bkg traces
     '''
@@ -90,7 +90,7 @@ def calculate_signal(semantic, signal, bkg_corr, int_corr):
         # THerefore, multiply the signal trace with the semantic label.
         # in semantic, 100 = mitotic, 1 = non-mitotic
         # semantic = (semantic - 1)/99
-    semantic = medfilt(semantic, 3) # Need to add to the class
+    semantic = medfilt(semantic, min_width) # Need to add to the class
     semantic = (semantic - 1)/99
 
     if signal.any():

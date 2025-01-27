@@ -1,7 +1,8 @@
 import os, tifffile
-from pathlib import Path, PosixPath, WindowsPath
+from pathlib import Path, PurePath
 from skimage.io import imread # type: ignore
 from skimage.morphology import erosion
+from skimage.filters.rank import minimum
 from skimage.measure import regionprops_table, block_reduce
 import napari # type: ignore
 import numpy as np
@@ -11,10 +12,11 @@ import scipy.ndimage as ndi
 from scipy.signal import find_peaks
 from analysis_pars import analysis_pars
 from cellaap_utils import *
+from skimage.util import img_as_uint
 
 class analysis:
     
-    def __init__(self, root_folder: Path, analysis_only: False):
+    def __init__(self, root_folder: Path, plotting_only: False):
         '''
         Object initializes with default parameter values and definitions of 
         root and inference folders. It also reads in tif files with either 
@@ -29,6 +31,11 @@ class analysis:
         self.stacks = {} # Dictionary stores image stacks
 
         ##
+        try:
+            root_folder.exists()
+        except:
+            raise ValueError(f"{root_folder} not a valid path")
+        
         self.root_folder = root_folder
         self.inference_folders = [] # list of folders with _inference in their names
         for directory in os.scandir(root_folder):
@@ -41,7 +48,7 @@ class analysis:
         self.intensity_map_present = False
         self.background_map_present = False
         
-        if not analysis_only:
+        if not plotting_only:
             for name in self.root_folder.glob("*_map.tif"):
                 map_type = name.name.split('_')[-2]
                 channel_name = name.name.split('_')[-3]
@@ -61,7 +68,7 @@ class analysis:
                         self.background_map_present = True
                         print(f"{name.name} used as the {channel_name} background map")
         else:
-            print(f"Opening {root_folder} in analysis mode.")
+            print(f"Opening {root_folder} in plotting only mode.")
 
 
     def files(self, cellaap_dir: Path, cell_type: str):
@@ -104,7 +111,8 @@ class analysis:
         instance_zoomed = np.zeros((instance_shape[0], instance_shape[1]*2, instance_shape[2]*2))
         print(f"Computing zoomed and eroded instance mask...")
         for i in np.arange(instance_shape[0]):
-            pre_zoom = erosion(self.stacks["instance"][i,:,:],self.defaults.erode_footprint)
+            pre_zoom = minimum(self.stacks["instance"][i,:,:].astype(np.uint16),
+                               self.defaults.erode_footprint)
             instance_zoomed[i, :, :] = ndi.zoom(pre_zoom, 2, order=0)
             
         self.stacks["instance_zoomed"] = instance_zoomed
@@ -122,7 +130,7 @@ class analysis:
         '''
 
         for key, value in type_file_dict.items():
-            if type(value) is PosixPath or WindowsPath:
+            if type(value) is PurePath:
                 if "intensity" in key:
                     intensity_map_name = value.parent / Path(value.stem + "_intensity_map.tif")
                     channel_map = value.stem.split('_')[-1] + "_intensity_map.tif"
@@ -230,16 +238,19 @@ class analysis:
 
         return self.tracked
     
-    def _display_tracks(self):
+    def _display_tracks(self, img_stack = None):
         '''
         '''
         if "viewer" not in self.__dict__.keys():
             self.viewer = napari.Viewer()
         
-        self.stacks["phase"] = imread(self.paths["phase"])
-        phase_binned = np.zeros_like(self.stacks["instance"], dtype=int)
-        for i in np.arange(phase_binned.shape[0]):
-            phase_binned[i,:,:]=block_reduce(self.stacks["phase"][i,:,:,],block_size=(2,2), func=np.max)
+        if img_stack is None:
+            self.stacks["phase"] = imread(self.paths["phase"])
+            phase_binned = np.zeros_like(self.stacks["instance"], dtype=int)
+            for i in np.arange(phase_binned.shape[0]):
+                phase_binned[i,:,:]=block_reduce(self.stacks["phase"][i,:,:,],block_size=(2,2), func=np.max)
+        else:
+            pass
 
         self.viewer.add_image(phase_binned)
         self.viewer.add_labels(self.stacks["semantic"])
@@ -435,6 +446,7 @@ class analysis:
                 self.inf_folder_list = [f for f in self.root_folder.glob('*_inference')]
             
             df_list = []
+            experiment = self.root_folder.parents[-1]
             for wp in well_position:
                 for f in self.inf_folder_list:
                     if wp in f.name:
@@ -442,6 +454,7 @@ class analysis:
                         if xls_file_name:
                             df = pd.read_excel(xls_file_name[0]) #assumes only one
                             df["well_pos"] = wp #assign well-position identifier
+                            df["experiment"] = experiment
                             df_list.append(df)
                             print(f"{wp} loaded")
                         else:

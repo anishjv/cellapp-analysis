@@ -14,18 +14,21 @@ class analysis_pars:
             raise ValueError(f"Choose one of {self.cell_types}")
         
         # Parameters for pre-processing inferred cell segmentations
-        self.erode_footprint = disk(7)
+        self.erode_footprint = disk(3)
         self.max_cell_size = 4000
         self.min_cell_size = 500
 
         # Median filter size for smoothing semantic label trace
-        self.min_mitotic_duration = 2 # Number of frames
-        self.delta_t = 10 # default time step in min
+        self.min_mitotic_duration = 20 # minutes
+        self.frame_interval = 10 #  time step in min
+        self.min_width  = self.min_mitotic_duration // self.frame_interval
 
         # trackpy parameters
         self.max_pixel_movement = 20
         self.tracking_memory    = 2
         self.min_track_length   = 10 # min track length
+        self.adaptive_tracking = False
+
         self.adaptive_tracking = False
 
         if cell_type.lower() == "ht1080":
