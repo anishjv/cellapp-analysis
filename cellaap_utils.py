@@ -94,21 +94,27 @@ def calculate_signal(semantic, signal, bkg_corr, int_corr, min_width):
     semantic = (semantic - 1)/99
 
     if signal.any():
-        signal = np.mean(signal[np.where(semantic)])
+        signal_mean = np.mean(signal[np.where(semantic)])
+        signal_std = np.std(signal[np.where(semantic)])
     else:
-        signal = 0
+        signal_mean = 0
+        signal_std = 0
     
     if bkg_corr.any():
-        bkg_corr = np.mean(bkg_corr[np.where(semantic)])
+        bkg_corr_mean = np.mean(bkg_corr[np.where(semantic)])
+        bkg_corr_std = np.std(bkg_corr[np.where(semantic)])
     else:
-        bkg_corr = 0
+        bkg_corr_mean = 0
+        bkg_corr_std = 0
 
     if int_corr.any():
-        int_corr = np.mean(int_corr[np.where(semantic)])
+        int_corr_mean = np.mean(int_corr[np.where(semantic)])
+        int_corr_std = np.std(int_corr[np.where(semantic)])
     else:
-        int_corr = 1
+        int_corr_mean = 1
+        int_corr_std = 0
 
-    return signal, bkg_corr, int_corr
+    return signal_mean, bkg_corr_mean, int_corr_mean, signal_std, bkg_corr_std, int_corr_std
 
 
 def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size = None) -> (pd.DataFrame, dict): # type: ignore
@@ -130,6 +136,8 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
     xy_data        - the input dataframe with bin labels added as a new column
     fit_pars       - dictionary containing fit parameters
     '''
+
+    xy_data.dropna(inplace=True)
     if quant_fraction is None:
         quant_fraction = [0.025, 0.85]
     quants = np.round(xy_data.iloc[:,0].quantile(quant_fraction)).tolist()
@@ -143,20 +151,29 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
     xy_data["bins"] = labels
 
     bin_means = xy_data.groupby("bins").mean()
+    bin_sizes = xy_data.groupby("bins").size()
+    bin_stderrs = xy_data.groupby("bins").std()
+    bin_stderrs['mitosis'] /= bin_sizes
+    bin_stderrs['GFP'] /= bin_sizes
     bin_means.dropna(inplace=True) # Some of the bins may not have any data
+    bin_stderrs.dropna(inplace=True)
     
+
     fits, _ = curve_fit(sigmoid_4par, bin_means.iloc[:,0], bin_means.iloc[:,-1], 
                         p0 = [bin_means.iloc[:,1].min(), bin_means.iloc[:,1].max(), 
                               5, (quants[0] + quants[-1])/ 4
                              ],
+                        sigma = bin_stderrs.iloc[:,0],
                         maxfev = 10000
                        )
 
+
     if plot:
         plt.plot(xy_data.iloc[:,0], xy_data.iloc[:,1], 'r.')
-        plt.plot(bin_means.iloc[:,0], bin_means.iloc[:,1], 'bo')
+        plt.plot(bin_means.iloc[:,0], bin_means.iloc[:,1], 'bo', 25)
         plt.plot(np.arange(0,1.5*quants[-1]), sigmoid_4par(np.arange(0,1.5*quants[-1]),
                                        fits[0], fits[1], fits[2], fits[3]), 'b-')
+        plt.errorbar(bin_means.iloc[:,0], bin_means.iloc[:,1], 2*bin_stderrs.iloc[:, 1], 2*bin_stderrs.iloc[:, 0], 'g')
     
     fit_values = { 'min_duration' : fits[0],
                    'max_duration' : fits[1],
@@ -164,7 +181,7 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
                    'EC50'         : fits[3]
                  }
     
-    return xy_data, bin_means, fit_values
+    return xy_data, bin_means, bin_stderrs, fit_values
 
 def sigmoid_4par(x, base, top, exponent, ec50):
 

@@ -5,6 +5,26 @@ import pandas as pd
 import matplotlib.pyplot as plt
 plt.ion()
 import napari
+<<<<<<< HEAD
+sys.path.append('/Users/ajitj/Google Drive/ImageAnalysis/cell_analysis')
+import cellaap_analysis
+
+create_correction_maps = True
+inference_dirs = []
+cell_type = 'HeLa'
+to_measure = ['GFP']
+map_dict = {"GFP_background"      :'',
+             "GFP_intensity"       :'',
+             "TexasRed_background" :'',
+             "TexasRed_intensity"  :''}
+
+root_path = Path('/Users/ajitj/Desktop/RPE1-U2OS')
+'''
+PARAMS ^
+----------------------------------------------------------------
+SCRIPT
+'''
+=======
 # sys.path.append('/Users/ajitj/Library/CloudStorage/GoogleDrive-ajitj@umich.edu/My Drive/ImageAnalysis/cell_analysis')
 sys.path.append('//Users/ajitj/Google Drive/ImageAnalysis/cellapp-analysis')
 import cellaap_analysis
@@ -30,10 +50,29 @@ for dir in inference_dirs:
     tracks = t.measure_signal('Texas Red', True, -1)
     tracks = t.measure_signal('GFP', True, -1)
     summary = t.summarize_data(True)
+>>>>>>> upstream/main
 
 
-# folder_path = Path('/Users/ajitj/Desktop/current/20241205_Bub1 ppg1 ppg2 pps121_F12_s3_phs_HeLa_2000_0.25_inference')
-# folder_path = Path('/Volumes/SharedHITSX/cdb-Joglekar-Lab-GL/Ajit_Joglekar/M6_spacer/20230619/pPS22-pPS124/2023-06-19/20259/20230619_pPS22-pPS124_B09_s3_phs_HeLa_2000_0.25_inference')
+def main(root_path, create_correction_maps, inference_dirs, cell_type, to_measure, map_dict):
+    t = cellaap_analysis.analysis(root_path, analysis_only = False)
+    if create_correction_maps:
+        t.create_correction_maps(map_dict)
+
+
+    for dir in inference_dirs:
+        if hasattr(t, 'summaryDF'):
+            delattr(t, 'summaryDF')
+            delattr(t, 'tracked')
+        t.files(dir, cell_type = cell_type)
+        t.track_centroids(save_flag=True)
+        for wavelength in to_measure:
+            tracks = t.measure_signal(wavelength, True, -1)
+
+        summary = t.summarize_data(True)
+
+if __name__ == "__main__":
+    main()
+
 
 
 

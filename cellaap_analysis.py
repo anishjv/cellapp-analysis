@@ -83,7 +83,7 @@ class analysis:
             self.paths["instance"] = Path([name for name in cellaap_dir.glob('*.tif') if "instance" in name.name][0])
             self.paths["semantic"] = Path([name for name in cellaap_dir.glob('*.tif') if "semantic" in name.name][0])
             # Keep the name stub to infer other file names
-            self.name_stub = self.paths["instance"].name.split('_phs')[0]
+            self.name_stub = self.paths["instance"].name.split('_instance')[0]
             self.defaults = analysis_pars(cell_type=cell_type)
         except:
             raise ValueError("Instance and/or semantic segmentations not found!")
@@ -366,26 +366,24 @@ class analysis:
         mito_start= []
         cell_area = []
         particle  = []
+        channels = []
         # Check which channels have been measured. If none, return only "mitotic duration"
         # Need to find a better way to code this.
-        GFP_exists = False
-        Texas_Red_exists = False
-        Cy5_exists = False
+
         if "GFP" in self.tracked.columns:
-            GFP_exists = True
-            GFP = []
-            GFP_bkg_corr = []
-            GFP_int_corr = []
+            channels.append('GFP')
         if "Texas_Red" in self.tracked.columns:
-            Texas_Red_exists = True
-            Texas_Red = []
-            Texas_Red_bkg_corr = []
-            Texas_Red_int_corr = []
+            channels.append("Texas_Red")
         if "Cy5" in self.tracked.columns:
-            Cy5_exists = True
-            Cy5 = []
-            Cy5_bkg_corr = []
-            Cy5_int_corr = []
+            channels.append("Cy5")
+        signal_storage = {}
+        for channel in channels:
+            signal_storage[f'{channel}'] = []
+            signal_storage[f'{channel}_std'] = []
+            signal_storage[f'{channel}_bkg_corr'] = []
+            signal_storage[f'{channel}_bkg_corr_std'] = []
+            signal_storage[f'{channel}_int_corr'] = []
+            signal_storage[f'{channel}_int_corr_std'] = []
 
         for id in idlist:
             semantic = self.tracked[self.tracked.particle==id].semantic
@@ -399,53 +397,33 @@ class analysis:
                 cell_area.append(self.tracked[self.tracked.particle==id].area.mean())
                 particle.append(id)
                 
-                if Texas_Red_exists:
-                    signal, bkg_corr, int_corr = calculate_signal(semantic, 
-                                                                  self.tracked[self.tracked.particle==id].Texas_Red.to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id].Texas_Red_bkg_corr.to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id].Texas_Red_int_corr.to_numpy(),
-                                                                  self.defaults.min_width)
-                    Texas_Red.append(signal)
-                    Texas_Red_bkg_corr.append(bkg_corr)
-                    Texas_Red_int_corr.append(int_corr)
+           
+                for channel in channels:
+                    signal, bkg_corr, int_corr, signal_std, bkg_std, int_std = calculate_signal(
+                                                                  semantic, 
+                                                                  self.tracked[self.tracked.particle==id][f'{channel}'].to_numpy(), 
+                                                                  self.tracked[self.tracked.particle==id][f'{channel}_bkg_corr'].to_numpy(), 
+                                                                  self.tracked[self.tracked.particle==id][f'{channel}_int_corr'].to_numpy()
+                                                                  )
+                    signal_storage[f'{channel}'].append(signal)
+                    signal_storage[f'{channel}_std'].append(signal_std)
+                    signal_storage[f'{channel}_bkg_corr'].append(bkg_corr)
+                    signal_storage[f'{channel}_bkg_corr_std'].append(bkg_std)
+                    signal_storage[f'{channel}_int_corr'].append(int_corr)
+                    signal_storage[f'{channel}_int_corr_std'].append(int_std)
                 
-                if GFP_exists:
-                    signal, bkg_corr, int_corr = calculate_signal(semantic, 
-                                                                  self.tracked[self.tracked.particle==id].GFP.to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id].GFP_bkg_corr.to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id].GFP_int_corr.to_numpy(),
-                                                                  self.defaults.min_width)
-                    GFP.append(signal)
-                    GFP_bkg_corr.append(bkg_corr)
-                    GFP_int_corr.append(int_corr)
-                
-                if Cy5_exists:
-                    signal, bkg_corr, int_corr = calculate_signal(semantic, 
-                                                                  self.tracked[self.tracked.particle==id].Cy5.to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id].Cy5_bkg_corr.to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id].Cy5_int_cor.to_numpy(),
-                                                                  self.defaults.min_width)
-                    Cy5.append(signal)
-                    Cy5_bkg_corr.append(bkg_corr)
-                    Cy5_int_corr.append(int_corr)
         
         # Construct summary DF
-        self.summaryDF = pd.DataFrame({"particle"  : particle,
-                                       "cell_area" : cell_area,
-                                       "mito_start": mito_start,
-                                       "mitosis"   : mitosis,})
-        if GFP_exists:
-            self.summaryDF["GFP"] = GFP
-            self.summaryDF["GFP_bkg_corr"] = GFP_bkg_corr
-            self.summaryDF["GFP_int_corr"] = GFP_int_corr
-        if Texas_Red_exists:
-            self.summaryDF["Texas_Red"] = Texas_Red
-            self.summaryDF["Texas_Red_corr"] = Texas_Red_bkg_corr
-            self.summaryDF["Texas_Red_int_corr"] = Texas_Red_int_corr
-        if Cy5_exists:
-            self.summaryDF["Cy5"] = Cy5
-            self.summaryDF["Cy5_bkg_corr"] = Cy5_bkg_corr
-            self.summaryDF["Cy5_int_corr"] = Cy5_int_corr
+        other_storage = {
+                        "particle"  : particle,
+                        "cell_area" : cell_area,
+                        "mito_start": mito_start,
+                        "mitosis"   : mitosis,
+                        }
+        
+        summary_storage = other_storage | signal_storage
+        self.summaryDF = pd.DataFrame(summary_storage)
+
 
         if save_flag:
             self.summaryDF.to_excel(self.cellaap_dir / Path(self.name_stub+"_summary.xlsx"))

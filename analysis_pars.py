@@ -42,4 +42,3 @@ class analysis_pars:
         if cell_type.lower() == "rpe1":
             self.max_pixel_movement = 30
             self.max_cell_size = 5000
-            self.adaptive_tracking = True
