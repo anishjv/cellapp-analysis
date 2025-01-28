@@ -83,7 +83,7 @@ class analysis:
             self.paths["instance"] = Path([name for name in cellaap_dir.glob('*.tif') if "instance" in name.name][0])
             self.paths["semantic"] = Path([name for name in cellaap_dir.glob('*.tif') if "semantic" in name.name][0])
             # Keep the name stub to infer other file names
-            self.name_stub = self.paths["instance"].name.split('_instance')[0]
+            self.name_stub = self.paths["instance"].name.split('_phs')[0]
             self.defaults = analysis_pars(cell_type=cell_type)
         except:
             raise ValueError("Instance and/or semantic segmentations not found!")
@@ -111,7 +111,7 @@ class analysis:
         instance_zoomed = np.zeros((instance_shape[0], instance_shape[1]*2, instance_shape[2]*2))
         print(f"Computing zoomed and eroded instance mask...")
         for i in np.arange(instance_shape[0]):
-            pre_zoom = minimum(self.stacks["instance"][i,:,:].astype(np.uint16),
+            pre_zoom = erosion(self.stacks["instance"][i,:,:].astype(np.int16),
                                self.defaults.erode_footprint)
             instance_zoomed[i, :, :] = ndi.zoom(pre_zoom, 2, order=0)
             
@@ -403,7 +403,8 @@ class analysis:
                                                                   semantic, 
                                                                   self.tracked[self.tracked.particle==id][f'{channel}'].to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id][f'{channel}_bkg_corr'].to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id][f'{channel}_int_corr'].to_numpy()
+                                                                  self.tracked[self.tracked.particle==id][f'{channel}_int_corr'].to_numpy(),
+                                                                  self.defaults.min_width
                                                                   )
                     signal_storage[f'{channel}'].append(signal)
                     signal_storage[f'{channel}_std'].append(signal_std)

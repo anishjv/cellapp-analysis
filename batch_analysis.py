@@ -5,28 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 plt.ion()
 import napari
-<<<<<<< HEAD
 sys.path.append('/Users/ajitj/Google Drive/ImageAnalysis/cell_analysis')
-import cellaap_analysis
-
-create_correction_maps = True
-inference_dirs = []
-cell_type = 'HeLa'
-to_measure = ['GFP']
-map_dict = {"GFP_background"      :'',
-             "GFP_intensity"       :'',
-             "TexasRed_background" :'',
-             "TexasRed_intensity"  :''}
-
-root_path = Path('/Users/ajitj/Desktop/RPE1-U2OS')
-'''
-PARAMS ^
-----------------------------------------------------------------
-SCRIPT
-'''
-=======
-# sys.path.append('/Users/ajitj/Library/CloudStorage/GoogleDrive-ajitj@umich.edu/My Drive/ImageAnalysis/cell_analysis')
-sys.path.append('//Users/ajitj/Google Drive/ImageAnalysis/cellapp-analysis')
 import cellaap_analysis
 
 # map_dict = {"GFP_background"      :'',
@@ -34,9 +13,10 @@ import cellaap_analysis
 #             "TexasRed_background" :'',
 #             "TexasRed_intensity"  :''}
 
-root_path = Path('/Volumes/SharedHITSX/cdb-Joglekar-Lab-GL/Soubhagyalaxmi_Jema/20250116/BubR1-overexpression/2025-01-17/20333')
-t = cellaap_analysis.analysis(root_path, analysis_only = False)
+root_path = Path('/Volumes/SharedHITSX/cdb-Joglekar-Lab-GL/Soubhagyalaxmi_Jema/2025-01-24/HeLa-BUB1_Mutant_Nocco/20336')
+t = cellaap_analysis.analysis(root_path, plotting_only= False)
 # t.create_correction_maps(map_dict)
+
 inference_dirs = []
 for dir in root_path.glob('*inference'):
     inference_dirs.append(dir)
@@ -45,33 +25,33 @@ for dir in inference_dirs:
     if hasattr(t, 'summaryDF'):
        delattr(t, 'summaryDF')
        delattr(t, 'tracked')
-    t.files(dir, cell_type = 'rpe1')
+    t.files(dir, cell_type = 'hela')
     tracks = t.track_centroids(False)
-    tracks = t.measure_signal('Texas Red', True, -1)
+    # tracks = t.measure_signal('Texas Red', True, -1)
     tracks = t.measure_signal('GFP', True, -1)
     summary = t.summarize_data(True)
->>>>>>> upstream/main
 
 
-def main(root_path, create_correction_maps, inference_dirs, cell_type, to_measure, map_dict):
-    t = cellaap_analysis.analysis(root_path, analysis_only = False)
-    if create_correction_maps:
-        t.create_correction_maps(map_dict)
+
+# def main(root_path, create_correction_maps, inference_dirs, cell_type, to_measure, map_dict):
+#     t = cellaap_analysis.analysis(root_path, analysis_only = False)
+#     if create_correction_maps:
+#         t.create_correction_maps(map_dict)
 
 
-    for dir in inference_dirs:
-        if hasattr(t, 'summaryDF'):
-            delattr(t, 'summaryDF')
-            delattr(t, 'tracked')
-        t.files(dir, cell_type = cell_type)
-        t.track_centroids(save_flag=True)
-        for wavelength in to_measure:
-            tracks = t.measure_signal(wavelength, True, -1)
+#     for dir in inference_dirs:
+#         if hasattr(t, 'summaryDF'):
+#             delattr(t, 'summaryDF')
+#             delattr(t, 'tracked')
+#         t.files(dir, cell_type = cell_type)
+#         t.track_centroids(save_flag=True)
+#         for wavelength in to_measure:
+#             tracks = t.measure_signal(wavelength, True, -1)
 
-        summary = t.summarize_data(True)
+#         summary = t.summarize_data(True)
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
 
 
 
