@@ -1,5 +1,5 @@
 import os, tifffile
-from pathlib import Path, PurePath
+from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 from skimage.io import imread # type: ignore
 from skimage.morphology import erosion
 from skimage.filters.rank import minimum
@@ -13,6 +13,9 @@ from scipy.signal import find_peaks
 from analysis_pars import analysis_pars
 from cellaap_utils import *
 from skimage.util import img_as_uint
+from os import listdir
+from os.path import isfile, join
+import re
 
 class analysis:
     
@@ -49,24 +52,28 @@ class analysis:
         self.background_map_present = False
         
         if not plotting_only:
-            for name in self.root_folder.glob("*_map.tif"):
-                map_type = name.name.split('_')[-2]
-                channel_name = name.name.split('_')[-3]
-                if channel_name == "Texas Red":
+            paths = [os.path.join(dirpath,f) for (dirpath, _, filenames) in os.walk(self.root_folder) for f in filenames]
+            maps_types_chnls = [
+                (
+                    name, re.search(r"background|intensity", name).group(), re.search(r"GFP|Texas Red|Cy5|phs", name).group()
+                    ) for name in paths if re.search(r"background|intensity", name)
+                ]
+            for name, type, channel_name in maps_types_chnls:
+                if channel_name  == "Texas Red":
                     channel_name = "Texas_Red"
 
-                match map_type:
+                match type:
                     case "intensity":
                         self.paths["intensity_map"] = Path(name)
                         self.stacks[channel_name + "_intensity_map"] = tifffile.imread(Path(name))
                         self.intensity_map_present = True
-                        print(f"{name.name} used as the {channel_name} intensity map")
+                        print(f"{name} used as the {channel_name} intensity map")
 
                     case "background":
                         self.paths["background_map"] = Path(name)
                         self.stacks[channel_name+"_background_map"] = imread(Path(name))
                         self.background_map_present = True
-                        print(f"{name.name} used as the {channel_name} background map")
+                        print(f"{name} used as the {channel_name} background map")
         else:
             print(f"Opening {root_folder} in plotting only mode.")
 
@@ -74,8 +81,8 @@ class analysis:
     def files(self, cellaap_dir: Path, cell_type: str):
         '''
         Inputs:
-        cellaap_dir: directory containing cellapp inference; must contain "instance" and "semnatic" tif files
-        cell_type: specify the cell type so approprite default pars are set
+        cellaap_dir: directory containing cellapp inference; must contain "instance" and "semantic" tif files
+        cell_type: specify the cell type so appropriate default pars are set
         '''
         # Process the path objects to retrieve the parent directories and suffixes
         try:
@@ -83,25 +90,31 @@ class analysis:
             self.paths["instance"] = Path([name for name in cellaap_dir.glob('*.tif') if "instance" in name.name][0])
             self.paths["semantic"] = Path([name for name in cellaap_dir.glob('*.tif') if "semantic" in name.name][0])
             # Keep the name stub to infer other file names
-            self.name_stub = self.paths["instance"].name.split('_phs')[0]
+            #self.name_stub = self.paths["instance"].name.split('_phs')[0]
+            self.name_stub = re.search(r"[A-H]([1-9]|[0][1-9]|[1][1-2])_s(\d{2}|\d{1})", str(self.paths["instance"])).group()
             self.defaults = analysis_pars(cell_type=cell_type)
         except:
             raise ValueError("Instance and/or semantic segmentations not found!")
 
         # Set path names for existing channel files
         self.data_dir = self.cellaap_dir.parent
-        for name in self.root_folder.glob(self.name_stub+'*.tif'):
-            print(f"{name.name} can be used for analysis and display")
-            channel = name.stem.split('_')[-1]
-            match channel:
-                case "phs":
-                    self.paths["phase"] = Path(name)
-                case "GFP":
-                    self.paths["GFP"] = Path(name)
-                case "Texas Red":
-                    self.paths["Texas_Red"] = Path(name)
-                case 'Cy5':
-                    self.paths["Cy5"] = Path(name)
+        image_paths = [os.path.join(dirpath,f) for (dirpath, _, filenames) in os.walk(self.data_dir) for f in filenames]
+        valid_paths = [
+            name for name in image_paths if re.search(r"(.tif|.tiff)", name) and str(self.name_stub) in name 
+        ]
+        for name in valid_paths:
+            channel = re.search(r"GFP|Texas Red|Cy5|phs", name)
+            if channel:
+                print(f"{name} can be used for analysis and display")
+                match channel.group():
+                    case "phs":
+                        self.paths["phase"] = Path(name)
+                    case "GFP":
+                        self.paths["GFP"] = Path(name)
+                    case "Texas Red":
+                        self.paths["Texas_Red"] = Path(name)
+                    case 'Cy5':
+                        self.paths["Cy5"] = Path(name)
                 
         # Only read instance and semantic stacks
         self.stacks["semantic"] = imread(self.paths["semantic"])
@@ -130,11 +143,11 @@ class analysis:
         '''
 
         for key, value in type_file_dict.items():
-            if type(value) is PurePath:
+            if type(value) is PurePosixPath or PureWindowsPath or Path:
                 if "intensity" in key:
                     intensity_map_name = value.parent / Path(value.stem + "_intensity_map.tif")
                     channel_map = value.stem.split('_')[-1] + "_intensity_map.tif"
-                    self.stacks[channel_map] = gen_intensity_correction_map(imread(value))
+                    self.stacks[channel_map] = gen_intensity_correction_map(imread(str(value)))
                     tifffile.imsave(intensity_map_name, self.stacks[channel_map].astype(np.float16))
                     self.paths[channel_map] = intensity_map_name
                     print(f"Intensity map saved in the data dir. as {intensity_map_name}")
@@ -142,7 +155,7 @@ class analysis:
                 elif "background" in key:
                     background_map_name = value.parent / Path(value.stem + "_background_map.tif")
                     channel_map = value.stem.split('_')[-1] + "_background_map.tif"
-                    self.stacks[channel_map] = gen_background_correction_map(imread(value))
+                    self.stacks[channel_map] = gen_background_correction_map(imread(str(value)))
                     tifffile.imsave(background_map_name, self.stacks[channel_map].astype(np.int16))
                     self.paths[channel_map] = background_map_name
                     print(f"Background map saved in the data dir. as {background_map_name}")
