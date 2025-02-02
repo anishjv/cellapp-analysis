@@ -92,6 +92,7 @@ class analysis:
             # Keep the name stub to infer other file names
             #self.name_stub = self.paths["instance"].name.split('_phs')[0]
             self.name_stub = re.search(r"[A-H]([1-9]|[0][1-9]|[1][1-2])_s(\d{2}|\d{1})", str(self.paths["instance"])).group()
+            self.expt_name = self.paths["instance"].name.split(f"{self.name_stub}")[0]
             self.defaults = analysis_pars(cell_type=cell_type)
         except:
             raise ValueError("Instance and/or semantic segmentations not found!")
@@ -247,7 +248,7 @@ class analysis:
                 self.tracked.loc[index, "mitotic"] = 0
         
         if save_flag:
-            self.tracked.to_excel(self.cellaap_dir / Path(self.name_stub+"_tracks.xlsx"))
+            self.tracked.to_excel(self.cellaap_dir / Path(self.expt_name+self.name_stub+"_tracks.xlsx"))
 
         return self.tracked
     
@@ -352,7 +353,7 @@ class analysis:
                 print(f"cell #{id} not processed; in mitosis at start or end")
 
         if save_flag:
-            with pd.ExcelWriter(self.cellaap_dir / Path(self.name_stub+'_analysis.xlsx')) as writer:  
+            with pd.ExcelWriter(self.cellaap_dir / Path(self.expt_name+self.name_stub+'_analysis.xlsx')) as writer:  
                 self.tracked.to_excel(writer, sheet_name='cell_data')
                 # There are no scalars - so turn into list; transform
                 pd.DataFrame([self.paths]).T.to_excel(writer,   sheet_name='file_data')
@@ -440,7 +441,7 @@ class analysis:
 
 
         if save_flag:
-            self.summaryDF.to_excel(self.cellaap_dir / Path(self.name_stub+"_summary.xlsx"))
+            self.summaryDF.to_excel(self.cellaap_dir / Path(self.expt_name+self.name_stub+"_summary.xlsx"))
 
         return self.summaryDF
     
