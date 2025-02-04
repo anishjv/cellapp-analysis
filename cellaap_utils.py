@@ -163,7 +163,7 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
                         p0 = [bin_means.iloc[:,1].min(), bin_means.iloc[:,1].max(), 
                               5, (quants[0] + quants[-1])/ 4
                              ],
-                        sigma = bin_stderrs.iloc[:,1],
+                        #sigma = bin_stderrs.iloc[:,1],
                         maxfev = 10000
                        )
 
