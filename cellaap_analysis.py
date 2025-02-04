@@ -1,5 +1,5 @@
 import os, tifffile
-from pathlib import Path, PurePath
+from pathlib import Path, PurePath, PosixPath
 from skimage.io import imread # type: ignore
 from skimage.morphology import erosion
 from skimage.filters.rank import minimum
@@ -106,8 +106,12 @@ class analysis:
         # Only read instance and semantic stacks
         self.stacks["semantic"] = imread(self.paths["semantic"])
         self.stacks["instance"] = imread(self.paths["instance"])
+        
         # Apply erosion before zooming to avoid duplicate computations
         instance_shape = self.stacks["instance"].shape
+        # Saving the number of planes for track filtering (summarize_data)
+        self.max_timepoints = instance_shape[0]
+
         instance_zoomed = np.zeros((instance_shape[0], instance_shape[1]*2, instance_shape[2]*2))
         print(f"Computing zoomed and eroded instance mask...")
         for i in np.arange(instance_shape[0]):
@@ -130,7 +134,7 @@ class analysis:
         '''
 
         for key, value in type_file_dict.items():
-            if type(value) is PurePath:
+            if type(value) is PosixPath:
                 if "intensity" in key:
                     intensity_map_name = value.parent / Path(value.stem + "_intensity_map.tif")
                     channel_map = value.stem.split('_')[-1] + "_intensity_map.tif"
@@ -302,11 +306,25 @@ class analysis:
         self.tracked[channel] = np.nan
         self.tracked[channel+"_int_corr"] = 1.
         self.tracked[channel+"_bkg_corr"] = 0. 
-
+        
+        
         for id in id_list:
             print(f"Processing cell #{id}...")
             semantic = self.tracked[self.tracked.particle==id].semantic.to_list()
-            if semantic[0] == 1 & semantic[-1] ==1:
+            # Measurement decision
+            measure_cell = False
+            if len(semantic) == self.max_timepoints:
+                if semantic[0] == 1 & semantic[-1] == 1:
+                    measure_cell = True
+                else:
+                    print(f"cell #{id} not measured; mitotic at start or end")
+            else:
+                if semantic[0] == 1:
+                    measure_cell = True
+                else:
+                    print(f"cell #{id} not measured; mitotic at start")
+            
+            if measure_cell:
                 frames = self.tracked[self.tracked.particle==id].frame.tolist()
                 labels = self.tracked[self.tracked.particle==id].label.tolist()
                 index  = self.tracked[self.tracked.particle==id].index
@@ -335,8 +353,6 @@ class analysis:
                 self.tracked.loc[index, channel+"_bkg_corr"] = background_correction
                 self.tracked.loc[index, channel+"_int_corr"] = intensity_correction
 
-            else:
-                print(f"cell #{id} not processed; in mitosis at start or end")
 
         if save_flag:
             with pd.ExcelWriter(self.cellaap_dir / Path(self.name_stub+'_analysis.xlsx')) as writer:  
@@ -387,7 +403,7 @@ class analysis:
 
         for id in idlist:
             semantic = self.tracked[self.tracked.particle==id].semantic
-            _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration)
+            _, props = find_peaks(semantic, width=self.defaults.min_width)
             
             # Only select tracks that have one peak in the semantic trace
             # This will bias the analysis to smaller mitotic durations

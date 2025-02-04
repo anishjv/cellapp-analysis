@@ -27,7 +27,7 @@ class analysis_pars:
         # trackpy parameters
         self.max_pixel_movement = 20
         self.tracking_memory    = 2
-        self.min_track_length   = 10 # min track length
+        self.min_track_length   = 30 # min track length
 
         self.adaptive_tracking = False
 
