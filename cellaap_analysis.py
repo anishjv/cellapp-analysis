@@ -448,12 +448,12 @@ class analysis:
         return self.summaryDF
     
     
-    def gather_plot_summaries(self, well_position: list) -> pd.DataFrame:
+    def compile_summaries(self, well_position: list) -> pd.DataFrame:
         '''
         Collects and concatenates the summary xslx spreadsheets from the designated well_position list.
         
         Inputs:
-        well_position : list with entries of the form r"[A-Z][dd]+_+[a-z][d+]"
+        well : list with entries of the form r"[A-Z][dd]+_+[a-z][d+]"
         Output: 
         data_summary  : dataframe with the data concatenated; well_pos - column designating well_pos
         '''
@@ -465,12 +465,15 @@ class analysis:
             df_list = []
             experiment = self.root_folder.parents[-1]
             for wp in well_position:
+                wp_string = '_'+wp+'_'
                 for f in self.inf_folder_list:
-                    if wp in f.name:
+                    if wp_string in f.name:
                         xls_file_name = [file for file in f.glob('*_summary.xlsx')]
                         if xls_file_name:
                             df = pd.read_excel(xls_file_name[0]) #assumes only one
-                            df["well_pos"] = wp #assign well-position identifier
+                            df["well"] = wp #assign well-position identifier
+                            position = f.name.split(wp_string)[1][:2]
+                            df["position"] = position
                             df["experiment"] = experiment
                             df_list.append(df)
                             print(f"{wp} loaded")
