@@ -149,21 +149,21 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
 
     labels, _ = pd.cut(xy_data.iloc[:, 0], bins, retbins=True)
     xy_data["bins"] = labels
-
+    
     bin_means = xy_data.groupby("bins").mean()
     bin_sizes = xy_data.groupby("bins").size()
     bin_stderrs = xy_data.groupby("bins").std()
-    bin_stderrs['mitosis'] /= bin_sizes
-    bin_stderrs['GFP'] /= bin_sizes
+    bin_stderrs.iloc[:,0] /= bin_sizes
+    bin_stderrs.iloc[:,1] /= bin_sizes
     bin_means.dropna(inplace=True) # Some of the bins may not have any data
     bin_stderrs.dropna(inplace=True)
     
 
-    fits, _ = curve_fit(sigmoid_4par, bin_means.iloc[:,0], bin_means.iloc[:,-1], 
+    fits, _ = curve_fit(sigmoid_4par, bin_means.iloc[:,0], bin_means.iloc[:,1], 
                         p0 = [bin_means.iloc[:,1].min(), bin_means.iloc[:,1].max(), 
                               5, (quants[0] + quants[-1])/ 4
                              ],
-                        sigma = bin_stderrs.iloc[:,0],
+                        # sigma = bin_stderrs.iloc[:,1].to_numpy(),
                         maxfev = 10000
                        )
 
@@ -173,7 +173,9 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
         plt.plot(bin_means.iloc[:,0], bin_means.iloc[:,1], 'bo', 25)
         plt.plot(np.arange(0,1.5*quants[-1]), sigmoid_4par(np.arange(0,1.5*quants[-1]),
                                        fits[0], fits[1], fits[2], fits[3]), 'b-')
-        plt.errorbar(bin_means.iloc[:,0], bin_means.iloc[:,1], 2*bin_stderrs.iloc[:, 1], 2*bin_stderrs.iloc[:, 0], 'g')
+        # plt.errorbar(bin_means.iloc[:,0], bin_means.iloc[:,1], 
+        #              yerr=2*bin_stderrs.iloc[:, 1], 
+        #              xerr=2*bin_stderrs.iloc[:, 0], mfc='g')
     
     fit_values = { 'min_duration' : fits[0],
                    'max_duration' : fits[1],

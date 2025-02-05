@@ -13,22 +13,7 @@ experiment1 = cellapp_analysis.analysis(Path(root_folder), plotting_only: False)
 
 If the boolean input is set true, the experiment1 object will look for and read in correction maps (if they are present; not used otherwise). Otherwise, the object waits for the path to a root_folder containing cellapp inference folders.
 
-2.**Plotting mode**: One can create multiple objects corresponding to multiple repeats of an experiment. e.g.,
-
-```python
-experiment1 = cellapp_analysis.analysis(Path(root_folder_1), plotting_only: True)
-
-experiment2 = cellapp_analysis.analysis(Path(root_folder_2), plotting_only: True)
-```
-
-In this mode, the module is used to compile all data corresponding to positions and wells belonging to the same treatment/cell line into one dataframe. e.g.,
-
-```python
-HeLa_wells = ["A02_s1", "H12_s5"] # Note the exact formant (\W\d+_s\d)
-HeLa_data = experiment1.gather_plot_summaries(HeLa_wells)  
-```
-
-3.**Measurement mode**: Set the plotting_only mode to False. With this, analysis object instatiation will detect image stacks with either "channel_background" and "channel_intensity" in the filename.
+2.**Measurement mode**: Set the plotting_only mode to False. With this, analysis object instatiation will detect image stacks with either "channel_background" and "channel_intensity" in the filename.
 
 ```python
 exp_analysis = cellaap_analysis.analysis(Path(root_folder), False)
@@ -67,7 +52,32 @@ Step 3: Use the **measure_signal** function to measure the fluorescence from the
 
 Step 4: Use the **summarize_data** function to create the summary Excel file that lists the average signals measured for all channels, duraion of mitosis, and the correction factors to account for background and excitation intensity variation.
 
-Step 5: Use the **gather_plot_summaries** function to collect multiple wells and/or positions that represent the same experiment. The function requires a list as the input. Each entry in the list must be a string encoding the well and position identifier. Notice the capitalization and well number convention used in the example below. The output is a dataframe with an additional column for the well+position designation. In the future, one more column indicating the experiment will be added.
+```python
+exp_analysis.files(Path(to_inference_folder), cell_type = "HeLa")
+exp_analysis.track_centroids(save_flag = False)
+tracks = exp_analysis.measure_signal('GFP', save_flag = False, id = -1)
+tracks = exp_analysis.measure_signal('Texas_Red', save_flag = True, id = -1)
+tracks = exp_analysis.measure_signal('Cy5', save_flag = True, id = -1) #if needed
+summary = exp_analysis.summarize_data(True)
+```
+
+3.**Plotting mode**: One can create multiple objects corresponding, e.g., to multiple repeats of an experiment.
+
+```python
+experiment1 = cellapp_analysis.analysis(Path(root_folder_1), plotting_only: True)
+
+experiment2 = cellapp_analysis.analysis(Path(root_folder_2), plotting_only: True)
+```
+
+In this mode, the module is used to compile all data corresponding to positions and wells belonging to the same treatment/cell line into one dataframe. e.g.,
+
+
+Step 5: Use the **compile_summaries** function to collect multiple wells and/or positions that represent the same experiment. The function requires a list as the input. Each entry in the list must be a string encoding the well and position identifier. Notice the capitalization and well number convention used in the example below. The output is a dataframe with an additional column for the well+position designation. In the future, one more column indicating the experiment will be added.
+
+```python
+HeLa_wells = ["A02", "H12"] # Note the exact formant
+HeLa_data = experiment1.compile_summaries(HeLa_wells)  
+```
 
 Step 6: Use the **fit_model** function to fit a 4-parameter Hill model to binned data. The function expects input data as a dataframe with the first column containing the fluorescence signal and the second column containing the time in mitosis. For this model to work, the 0 dosage response must be defined as a positive value. This value must be obtained from a -rapamycin well or otherwise supplied. If it is unavailable, perform a rough background subtraction as shown below on a temporary basis.
 
@@ -76,16 +86,9 @@ quant_fraction must a list that specifies the quantiles to be evaluated for the 
 bin_size is arbitrarily defined and can also be adjusted if necessary. Don't use lower values (the default shown below is empirically defined).
 
 ```python
-exp_analysis.files(Path(to_inference_folder), cell_type = "HeLa")
-exp_analysis.track_centroids(save_flag = False)
-tracks = exp_analysis.measure_signal('GFP', save_flag = False, id = -1)
-tracks = exp_analysis.measure_signal('Texas_Red', save_flag = True, id = -1)
-tracks = exp_analysis.measure_signal('Cy5', save_flag = True, id = -1) #if needed
-summary = exp_analysis.summarize_data(True)
-well_pos_list = ["A01_s1", "A12_s5", "B05_s3"]
-compiled_data = exp_analysis.gather_plot_summaries(well_pos_list)
-
 # plotting and curve-fitting compiled data
+# Note that the first column must be the "dosage" (fluorescence signal) and the second
+# column must be the "response" (time in mitosis)
 dose_response = compiled_data.loc[:, ('Texas_Red', 'mitosis')]
 # rough background subtraction 
 dose_response.Texas_Red = dose_response.Texas_Red - dose_response.Texas_Red.min()

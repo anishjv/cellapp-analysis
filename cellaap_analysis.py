@@ -120,8 +120,12 @@ class analysis:
         # Only read instance and semantic stacks
         self.stacks["semantic"] = imread(self.paths["semantic"])
         self.stacks["instance"] = imread(self.paths["instance"])
+        
         # Apply erosion before zooming to avoid duplicate computations
         instance_shape = self.stacks["instance"].shape
+        # Saving the number of planes for track filtering (summarize_data)
+        self.max_timepoints = instance_shape[0]
+
         instance_zoomed = np.zeros((instance_shape[0], instance_shape[1]*2, instance_shape[2]*2))
         print(f"Computing zoomed and eroded instance mask...")
         for i in np.arange(instance_shape[0]):
@@ -316,11 +320,25 @@ class analysis:
         self.tracked[channel] = np.nan
         self.tracked[channel+"_int_corr"] = 1.
         self.tracked[channel+"_bkg_corr"] = 0. 
-
+        
+        
         for id in id_list:
             print(f"Processing cell #{id}...")
             semantic = self.tracked[self.tracked.particle==id].semantic.to_list()
-            if semantic[0] == 1 & semantic[-1] ==1:
+            # Measurement decision
+            measure_cell = False
+            if len(semantic) == self.max_timepoints:
+                if semantic[0] == 1 & semantic[-1] == 1:
+                    measure_cell = True
+                else:
+                    print(f"cell #{id} not measured; mitotic at start or end")
+            else:
+                if semantic[0] == 1:
+                    measure_cell = True
+                else:
+                    print(f"cell #{id} not measured; mitotic at start")
+            
+            if measure_cell:
                 frames = self.tracked[self.tracked.particle==id].frame.tolist()
                 labels = self.tracked[self.tracked.particle==id].label.tolist()
                 index  = self.tracked[self.tracked.particle==id].index
@@ -349,8 +367,6 @@ class analysis:
                 self.tracked.loc[index, channel+"_bkg_corr"] = background_correction
                 self.tracked.loc[index, channel+"_int_corr"] = intensity_correction
 
-            else:
-                print(f"cell #{id} not processed; in mitosis at start or end")
 
         if save_flag:
             with pd.ExcelWriter(self.cellaap_dir / Path(self.expt_name+self.name_stub+'_analysis.xlsx')) as writer:  
@@ -401,7 +417,7 @@ class analysis:
 
         for id in idlist:
             semantic = self.tracked[self.tracked.particle==id].semantic
-            _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration)
+            _, props = find_peaks(semantic, width=self.defaults.min_width)
             
             # Only select tracks that have one peak in the semantic trace
             # This will bias the analysis to smaller mitotic durations
@@ -446,12 +462,12 @@ class analysis:
         return self.summaryDF
     
     
-    def gather_plot_summaries(self, well_position: list) -> pd.DataFrame:
+    def compile_summaries(self, well_position: list) -> pd.DataFrame:
         '''
         Collects and concatenates the summary xslx spreadsheets from the designated well_position list.
         
         Inputs:
-        well_position : list with entries of the form r"[A-Z][dd]+_+[a-z][d+]"
+        well : list with entries of the form r"[A-Z][dd]+_+[a-z][d+]"
         Output: 
         data_summary  : dataframe with the data concatenated; well_pos - column designating well_pos
         '''
@@ -463,12 +479,15 @@ class analysis:
             df_list = []
             experiment = self.root_folder.parents[-1]
             for wp in well_position:
+                wp_string = '_'+wp+'_'
                 for f in self.inf_folder_list:
-                    if wp in f.name:
+                    if wp_string in f.name:
                         xls_file_name = [file for file in f.glob('*_summary.xlsx')]
                         if xls_file_name:
                             df = pd.read_excel(xls_file_name[0]) #assumes only one
-                            df["well_pos"] = wp #assign well-position identifier
+                            df["well"] = wp #assign well-position identifier
+                            position = f.name.split(wp_string)[1][:2]
+                            df["position"] = position
                             df["experiment"] = experiment
                             df_list.append(df)
                             print(f"{wp} loaded")
