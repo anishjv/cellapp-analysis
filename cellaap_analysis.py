@@ -477,7 +477,7 @@ class analysis:
                 self.inf_folder_list = [f for f in self.root_folder.glob('*_inference')]
             
             df_list = []
-            experiment = self.root_folder.parents[-1]
+            experiment = self.root_folder.parent
 
             pattern = re.compile(r'_(\w\d+)_(\w\d+)_')
 
@@ -489,7 +489,7 @@ class analysis:
                         if xls_file_name:
                             df = pd.read_excel(xls_file_name[0]) #assumes only one
                             df["well"] = well #assign well-position identifier
-                            position = pattern.findall(xls_file_name)[1]
+                            position = pattern.findall(xls_file_name[0].name)[0][1]
                             df["position"] = position
                             df["experiment"] = experiment
                             df_list.append(df)
