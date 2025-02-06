@@ -92,5 +92,7 @@ bin_size is arbitrarily defined and can also be adjusted if necessary. Don't use
 dose_response = compiled_data.loc[:, ('Texas_Red', 'mitosis')]
 # rough background subtraction 
 dose_response.Texas_Red = dose_response.Texas_Red - dose_response.Texas_Red.min()
-xy_data, bin_means, fit_values = fit_model(dose_response, plot: True, quant_fraction = [0.025, 0.85], bin_size = 2.5)
+xy_data, bin_means, fit_values = fit_model(dose_response, plot: True, 
+                                           quant_fraction = [0.025, 0.85], 
+                                           bin_size = 2.5)
 ```
