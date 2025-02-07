@@ -99,14 +99,15 @@ class analysis:
 
         # Set path names for existing channel files
         self.data_dir = self.cellaap_dir.parent
-        image_paths = [os.path.join(dirpath,f) for (dirpath, _, filenames) in os.walk(self.data_dir) for f in filenames]
+        image_paths = list(self.data_dir.glob('*.tif')) + list(self.data_dir.glob('*.tiff'))
+        image_paths = map(str, image_paths)
         valid_paths = [
-            name for name in image_paths if re.search(r"(.tif|.tiff)", name) and str(self.name_stub) in name 
+            name for name in image_paths if re.search(r"(.tif|.tiff)", name) and str(self.name_stub) in name
         ]
         for name in valid_paths:
             channel = re.search(r"GFP|Texas Red|Cy5|phs", name)
             if channel:
-                print(f"{name} can be used for analysis and display")
+                print(f"{str(name)} can be used for analysis and display")
                 match channel.group():
                     case "phs":
                         self.paths["phase"] = Path(name)
