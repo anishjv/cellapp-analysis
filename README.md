@@ -11,7 +11,7 @@ This analysis and summary are saved as separate excel spreadsheets.
 experiment1 = cellapp_analysis.analysis(Path(root_folder), plotting_only: False)
 ```
 
-If the boolean input is set true, the experiment1 object will look for and read in correction maps (if they are present; not used otherwise). Otherwise, the object waits for the path to a root_folder containing cellapp inference folders.
+If the boolean input is set False, the experiment1 object will look for and read in correction maps (if they are present; not used otherwise). Otherwise, the object waits for the path to a root_folder containing cellapp inference folders.
 
 2.**Measurement mode**: Set the plotting_only mode to False. With this, analysis object instatiation will detect image stacks with either "channel_background" and "channel_intensity" in the filename.
 
