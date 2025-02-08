@@ -91,7 +91,7 @@ class analysis:
             self.paths["semantic"] = Path([name for name in cellaap_dir.glob('*.tif') if "semantic" in name.name][0])
             # Keep the name stub to infer other file names
             #self.name_stub = self.paths["instance"].name.split('_phs')[0]
-            self.name_stub = re.search(r"[A-H]([1-9]|[0][1-9]|[1][1-2])_s(\d{2}|\d{1})", str(self.paths["instance"])).group()
+            self.name_stub = re.search(r"[A-H]([1-9]|[0][1-9]|[1][0-2])_s(\d{2}|\d{1})", str(self.paths["semantic"].name)).group()
             self.expt_name = self.paths["instance"].name.split(f"{self.name_stub}")[0]
             self.defaults = analysis_pars(cell_type=cell_type)
         except:
@@ -461,7 +461,7 @@ class analysis:
         if save_flag:
             with pd.ExcelWriter(self.cellaap_dir / Path(self.expt_name+self.name_stub+"_summary.xlsx")) as writer: 
                 self.summaryDF.to_excel(writer,sheet_name = "Summary")
-                pd.DataFrame([self.paths]).T.to_excel(writer,   sheet_name='file_data')
+                pd.DataFrame([self.paths]).T.to_excel(writer, sheet_name='file_data')
                 pd.DataFrame([self.defaults.__dict__]).T.to_excel(writer,sheet_name='parameters')
 
         return self.summaryDF
