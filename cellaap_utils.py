@@ -91,7 +91,7 @@ def calculate_signal(semantic, signal, bkg_corr, int_corr, min_width):
         # in semantic, 100 = mitotic, 1 = non-mitotic
         # semantic = (semantic - 1)/99
     semantic = medfilt(semantic, min_width) # Need to add to the class
-    semantic = (semantic - 1)/99
+    semantic = (semantic - 1)//99
 
     if signal.any():
         signal_mean = np.mean(signal[np.where(semantic)])

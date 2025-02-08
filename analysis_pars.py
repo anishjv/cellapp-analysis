@@ -19,10 +19,12 @@ class analysis_pars:
         self.min_cell_size = 500
 
         # Median filter size for smoothing semantic label trace
-        self.min_mitotic_duration = 30 # minutes
-        self.frame_interval = 10 #  time step in min
-        # Must be odd for median filtering to work
-        self.min_width  = self.min_mitotic_duration // self.frame_interval
+        # self.min_mitotic_duration = 30 # minutes
+        # self.frame_interval = 10 #  time step in min
+        # # Must be odd for median filtering to work
+        # self.min_width  = self.min_mitotic_duration // self.frame_interval
+        self.median_filter_width = 7
+        self.min_mitotic_duration = 4 #Number of frames - set by the filter width
 
         # trackpy parameters
         self.max_pixel_movement = 20

@@ -374,6 +374,7 @@ class analysis:
                 self.tracked.to_excel(writer, sheet_name='cell_data')
                 # There are no scalars - so turn into list; transform
                 pd.DataFrame([self.paths]).T.to_excel(writer,   sheet_name='file_data')
+                pd.DataFrame([self.defaults.__dict__]).T.to_excel(writer,sheet_name='parameters')
             # self.tracked.to_excel()
 
         return self.tracked
@@ -418,7 +419,7 @@ class analysis:
 
         for id in idlist:
             semantic = self.tracked[self.tracked.particle==id].semantic
-            _, props = find_peaks(semantic, width=self.defaults.min_width)
+            _, props = find_peaks(semantic, width=self.defaults.median_filter_width)
             
             # Only select tracks that have one peak in the semantic trace
             # This will bias the analysis to smaller mitotic durations
@@ -435,7 +436,7 @@ class analysis:
                                                                   self.tracked[self.tracked.particle==id][f'{channel}'].to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id][f'{channel}_bkg_corr'].to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id][f'{channel}_int_corr'].to_numpy(),
-                                                                  self.defaults.min_width
+                                                                  self.defaults.median_filter_width
                                                                   )
                     signal_storage[f'{channel}'].append(signal)
                     signal_storage[f'{channel}_std'].append(signal_std)
@@ -458,7 +459,10 @@ class analysis:
 
 
         if save_flag:
-            self.summaryDF.to_excel(self.cellaap_dir / Path(self.expt_name+self.name_stub+"_summary.xlsx"))
+            with pd.ExcelWriter(self.cellaap_dir / Path(self.expt_name+self.name_stub+"_summary.xlsx")) as writer: 
+                self.summaryDF.to_excel(writer,sheet_name = "Summary")
+                pd.DataFrame([self.paths]).T.to_excel(writer,   sheet_name='file_data')
+                pd.DataFrame([self.defaults.__dict__]).T.to_excel(writer,sheet_name='parameters')
 
         return self.summaryDF
     
