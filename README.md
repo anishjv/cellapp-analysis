@@ -5,7 +5,7 @@ This analysis and summary are saved as separate excel spreadsheets.
 
 ## Usage
 
-1. Specify the root folder (this folder must contain cellapp-generated inference folders and the raw intensity stacks.) This must be input as a Path.
+1. **Specify the root folder**. This folder must contain cellapp-generated inference folders and the raw intensity stacks and is input as a Path object.
 
 ```python
 experiment1 = cellapp_analysis.analysis(Path(root_folder), plotting_only: False)
@@ -33,7 +33,7 @@ exp_analysis.create_correction_maps(map_dict)
 These correction maps are optional; analysis will progress without them.
 
 **A note about default analysis parameters:**
-These are set by the **analysis_pars** class. If necessary, you can change them to achieve satisfactory results. These are stored in the self.defaults object and can be reset as such. Some of the tracking parameters can be changed on the fly; refer to the self.tracking function for details.
+These are set by the **analysis_pars** class. If necessary, you can change them to achieve satisfactory results. The object is stored as self.defaults and can be reset as such. Some of the tracking parameters can be changed on the fly; refer to the self.track_centroids function for details.
 
 The main parameters relate to trackpy configuration:
 
@@ -44,13 +44,13 @@ The main parameters relate to trackpy configuration:
 5. memory = 2: tracking memory in timepoints
 6. min_mitotic_duration = 2: (unrelated to trackpy); mitotic events smaller than 2 timepoints are filtered out.
 
-Step 1: Point the analysis object to a specific inference folder by providing a path to it. This will read the instance segmentation file from this folder.
+**Step 1:** Point the analysis object to a specific inference folder by providing a path to it. This will read the instance segmentation file from this folder.
 
-Step 2: Use the **track_centroids** method; it will erode the instance segmentation with the default footprint (needs to be customized for different cells), track the resultant masks using trackpy, and then determine the cell-state by reading the semantic stack. The intermediate padas dataframe can be saved to excel using the flag. Currently, the 'HeLa' input does not do anything; the plan is to use cell-line-specific parameters for trackpy (e.g., when some cells crawl around)
+**Step 2:** Use the **track_centroids** method; it will erode the instance segmentation with the default footprint (needs to be customized for different cells), track the resultant masks using trackpy, and then determine the cell-state by reading the semantic stack. The intermediate padas dataframe can be saved to excel using the flag. Currently, the 'HeLa' input does not do anything; the plan is to use cell-line-specific parameters for trackpy (e.g., when some cells crawl around)
 
-Step 3: Use the **measure_signal** function to measure the fluorescence from the specified channel. The channel string must match the channel name in the file names. The "id = -1" will make the function measure data for all cells that went through a complete mitosis during the time lapse. Optionally, one can provide a list with cell numbers (development only). Thus, cells that remained in interphase throughout the experiment are not measured. Their tracks are still reported.
+**Step 3:** Use the **measure_signal** function to measure the fluorescence from the specified channel. The channel string must match the channel name in the file names. The "id = -1" will make the function measure data for all cells that went through a complete mitosis during the time lapse. Optionally, one can provide a list with cell numbers (development only). Thus, cells that remained in interphase throughout the experiment are not measured. Their tracks are still reported.
 
-Step 4: Use the **summarize_data** function to create the summary Excel file that lists the average signals measured for all channels, duraion of mitosis, and the correction factors to account for background and excitation intensity variation. Before computing the summary measurements, the semantic label vector is run through a **median filter of width 7 to remove any gaps of 2 frames or less**. This merges "mitotic" label peaks separated by erroneous semantic labels. This step also removes any peaks less than 4 frames in length. **Thus, with the standard time interval of 10 minutes, the minimum mitotic duration is 40 min. The filter length must be matched to time interval between successive images.**
+**Step 4:** Use the **summarize_data** function to create the summary Excel file that lists the average signals measured for all channels, duraion of mitosis, and the correction factors to account for background and excitation intensity variation. Before computing the summary measurements, the semantic label vector is run through a **median filter of width 7 to remove any gaps of 2 frames or less**. This merges "mitotic" label peaks separated by erroneous semantic labels. This step also removes any peaks less than 4 frames in length. **Thus, with the standard time interval of 10 minutes, the minimum mitotic duration is 40 min. The filter length must be matched to time interval between successive images.**
 This function introduces two filters:
 
 1. Any cell that is in mitosis at the beginning or end of the movie is not summarized.
@@ -75,14 +75,14 @@ experiment2 = cellapp_analysis.analysis(Path(root_folder_2), plotting_only: True
 
 In this mode, the module is used to compile all data corresponding to positions and wells belonging to the same treatment/cell line into one dataframe. e.g.,
 
-Step 5: Use the **compile_summaries** function to collect multiple wells and/or positions that represent the same experiment. The function requires a list as the input. Each entry in the list must be a string encoding the well and position identifier. Notice the capitalization and well number convention used in the example below. The output is a dataframe with an additional column for the well+position designation. In the future, one more column indicating the experiment will be added.
+**Step 5:** Use the **compile_summaries** function to collect multiple wells and/or positions that represent the same experiment. The function requires a list as the input. Each entry in the list must be a string encoding the well and position identifier. Notice the capitalization and well number convention used in the example below. The output is a dataframe with an additional column for the well+position designation. In the future, one more column indicating the experiment will be added.
 
 ```python
 HeLa_wells = ["A02", "H12"] # Note the exact formant
 HeLa_data = experiment1.compile_summaries(HeLa_wells)  
 ```
 
-Step 6: Use the **fit_model** function to fit a 4-parameter Hill model to binned data. The function expects input data as a dataframe with the first column containing the fluorescence signal and the second column containing the time in mitosis. For this model to work, the 0 dosage response must be defined as a positive value. This value must be obtained from a -rapamycin well or otherwise supplied. If it is unavailable, perform a rough background subtraction as shown below on a temporary basis.
+**Step 6:** Use the **fit_model** function to fit a 4-parameter Hill model to binned data. The function expects input data as a dataframe with the first column containing the fluorescence signal and the second column containing the time in mitosis. For this model to work, the 0 dosage response must be defined as a positive value. This value must be obtained from a -rapamycin well or otherwise supplied. If it is unavailable, perform a rough background subtraction as shown below on a temporary basis.
 
 quant_fraction must a list that specifies the quantiles to be evaluated for the dosage. The bin range is based on the quantile values of the dosage values. Remember that the eSAC dosage distribution is asymmetric (it should be possible to fit it with a log-normal distribution). Therefore, the default quantile values (used below) are asymmetric.
 
