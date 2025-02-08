@@ -1,5 +1,6 @@
 import numpy.typing as npt
 from skimage.filters import gaussian
+from skimage.morphology import erosion, dilation
 import numpy as np
 import scipy.ndimage as ndi
 from scipy.signal import medfilt
@@ -82,16 +83,22 @@ def mean_signal_from_mask(img: npt.NDArray, mask: npt.NDArray):
 
 
 
-def calculate_signal(semantic, signal, bkg_corr, int_corr, min_width):
+def calculate_signal(semantic, signal, bkg_corr, int_corr, footprint):
     '''
     utility function for calculating signal from the given semantic, signal, and bkg traces
     '''
-    # I also noticed that the signal goes up during metaphase. 
-        # THerefore, multiply the signal trace with the semantic label.
-        # in semantic, 100 = mitotic, 1 = non-mitotic
-        # semantic = (semantic - 1)/99
-    semantic = medfilt(semantic, min_width) # Need to add to the class
-    semantic = (semantic - 1)//99
+    # There are 0 values wherever tracking failed. Bring these up to 1.
+    semantic = semantic.to_numpy()
+    semantic[semantic==0] = 1
+    # THerefore, multiply the signal trace with the semantic label.
+    # in semantic, 100 = mitotic, 1 = non-mitotic
+    semantic = (semantic - 1)/99
+
+    semantic = dilation(semantic, footprint=footprint)
+    semantic = erosion(semantic, footprint=footprint)
+
+    # semantic = medfilt(semantic, min_width) # Need to add to the class
+    # semantic = (semantic - 1)//99
 
     if signal.any():
         signal_mean = np.mean(signal[np.where(semantic)])

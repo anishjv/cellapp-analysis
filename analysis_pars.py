@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 from skimage.morphology import disk
 
 class analysis_pars:
@@ -24,7 +25,9 @@ class analysis_pars:
         # # Must be odd for median filtering to work
         # self.min_width  = self.min_mitotic_duration // self.frame_interval
         self.median_filter_width = 7
-        self.min_mitotic_duration = 4 #Number of frames - set by the filter width
+        # self.min_mitotic_duration = 4 #Number of frames - set by the filter width
+        self.min_mitotic_duration = 3 # number of frames
+        self.semantic_footprint = np.ones(self.min_mitotic_duration)
 
         # trackpy parameters
         self.max_pixel_movement = 20

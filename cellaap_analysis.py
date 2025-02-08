@@ -419,7 +419,7 @@ class analysis:
 
         for id in idlist:
             semantic = self.tracked[self.tracked.particle==id].semantic
-            _, props = find_peaks(semantic, width=self.defaults.median_filter_width)
+            _, props = find_peaks(semantic, width=self.defaults.semantic_footprint)
             
             # Only select tracks that have one peak in the semantic trace
             # This will bias the analysis to smaller mitotic durations
@@ -436,7 +436,7 @@ class analysis:
                                                                   self.tracked[self.tracked.particle==id][f'{channel}'].to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id][f'{channel}_bkg_corr'].to_numpy(), 
                                                                   self.tracked[self.tracked.particle==id][f'{channel}_int_corr'].to_numpy(),
-                                                                  self.defaults.median_filter_width
+                                                                  self.defaults.semantic_footprint
                                                                   )
                     signal_storage[f'{channel}'].append(signal)
                     signal_storage[f'{channel}_std'].append(signal_std)
