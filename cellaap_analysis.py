@@ -419,6 +419,7 @@ class analysis:
 
         for id in idlist:
             semantic = self.tracked[self.tracked.particle==id].semantic.to_numpy()
+            # remove 0's, fill gaps.
             semantic[semantic==0] = 1
             semantic = (semantic - 1)//99
             semantic = closing(semantic, self.defaults.semantic_footprint)
@@ -434,15 +435,15 @@ class analysis:
                 particle.append(id)
                 track_length.append(semantic.shape[0])
                 
-           
+        
                 for channel in channels:
                     signal, bkg_corr, int_corr, signal_std, bkg_std, int_std = calculate_signal(
-                                                                  semantic, 
-                                                                  self.tracked[self.tracked.particle==id][f'{channel}'].to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id][f'{channel}_bkg_corr'].to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id][f'{channel}_int_corr'].to_numpy(),
-                                                                  self.defaults.semantic_footprint
-                                                                  )
+                                                                semantic, 
+                                                                self.tracked[self.tracked.particle==id][f'{channel}'].to_numpy(), 
+                                                                self.tracked[self.tracked.particle==id][f'{channel}_bkg_corr'].to_numpy(), 
+                                                                self.tracked[self.tracked.particle==id][f'{channel}_int_corr'].to_numpy(),
+                                                                self.defaults.semantic_footprint
+                                                                )
                     signal_storage[f'{channel}'].append(signal)
                     signal_storage[f'{channel}_std'].append(signal_std)
                     signal_storage[f'{channel}_bkg_corr'].append(bkg_corr)
