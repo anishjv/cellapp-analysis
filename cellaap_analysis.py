@@ -90,7 +90,6 @@ class analysis:
             self.paths["instance"] = Path([name for name in cellaap_dir.glob('*.tif') if "instance" in name.name][0])
             self.paths["semantic"] = Path([name for name in cellaap_dir.glob('*.tif') if "semantic" in name.name][0])
             # Keep the name stub to infer other file names
-            #self.name_stub = self.paths["instance"].name.split('_phs')[0]
             self.name_stub = re.search(r"[A-H]([1-9]|[0][1-9]|[1][0-2])_s(\d{2}|\d{1})", str(self.paths["semantic"].name)).group()
             self.expt_name = self.paths["instance"].name.split(f"{self.name_stub}")[0]
             self.defaults = analysis_pars(cell_type=cell_type)
@@ -420,7 +419,7 @@ class analysis:
 
         for id in idlist:
             semantic = self.tracked[self.tracked.particle==id].semantic
-            _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration)
+            _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
             
             # Only select tracks that have one peak in the semantic trace
             # This will bias the analysis to smaller mitotic durations
