@@ -394,11 +394,12 @@ class analysis:
         '''
         # Select only those tracks where mitosis was observed
         idlist    = list(set(self.tracked[self.tracked.mitotic==1].particle))
-        mitosis   = []
-        mito_start= []
-        cell_area = []
-        particle  = []
-        channels = []
+        mitosis   =    []
+        mito_start=    []
+        cell_area =    []
+        particle  =    []
+        track_length = []
+        channels =     []
         # Check which channels have been measured. If none, return only "mitotic duration"
         # Need to find a better way to code this.
 
@@ -419,7 +420,7 @@ class analysis:
 
         for id in idlist:
             semantic = self.tracked[self.tracked.particle==id].semantic
-            _, props = find_peaks(semantic, width=self.defaults.semantic_footprint)
+            _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration)
             
             # Only select tracks that have one peak in the semantic trace
             # This will bias the analysis to smaller mitotic durations
@@ -428,6 +429,7 @@ class analysis:
                 mito_start.append(props['left_bases'][0])
                 cell_area.append(self.tracked[self.tracked.particle==id].area.mean())
                 particle.append(id)
+                track_length.append(semantic.shape[0])
                 
            
                 for channel in channels:
@@ -448,10 +450,11 @@ class analysis:
         
         # Construct summary DF
         other_storage = {
-                        "particle"  : particle,
-                        "cell_area" : cell_area,
-                        "mito_start": mito_start,
-                        "mitosis"   : mitosis,
+                        "particle"     : particle,
+                        "track_length" : track_length,
+                        "mito_start"   : mito_start,
+                        "cell_area"    : cell_area,
+                        "mitosis"      : mitosis,
                         }
         
         summary_storage = other_storage | signal_storage
