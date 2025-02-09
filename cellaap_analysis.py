@@ -1,7 +1,7 @@
 import os, tifffile
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 from skimage.io import imread # type: ignore
-from skimage.morphology import erosion
+from skimage.morphology import erosion, closing
 from skimage.filters.rank import minimum
 from skimage.measure import regionprops_table, block_reduce
 import napari # type: ignore
@@ -418,7 +418,11 @@ class analysis:
             signal_storage[f'{channel}_int_corr_std'] = []
 
         for id in idlist:
-            semantic = self.tracked[self.tracked.particle==id].semantic
+            semantic = self.tracked[self.tracked.particle==id].semantic.to_numpy()
+            semantic[semantic==0] = 1
+            semantic = (semantic - 1)//99
+            semantic = closing(semantic, self.defaults.semantic_footprint)
+
             _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
             
             # Only select tracks that have one peak in the semantic trace
