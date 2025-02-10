@@ -418,12 +418,13 @@ class analysis:
             signal_storage[f'{channel}_int_corr_std'] = []
 
         for id in idlist:
+            
             semantic = self.tracked[self.tracked.particle==id].semantic.to_numpy()
             # remove 0's, fill gaps.
             semantic[semantic==0] = 1
             semantic = (semantic - 1)//99
             semantic = closing(semantic, self.defaults.semantic_footprint)
-
+            # Find peaks
             _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
             
             # Only select tracks that have one peak in the semantic trace

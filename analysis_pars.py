@@ -22,9 +22,11 @@ class analysis_pars:
         # Median filter size for smoothing semantic label trace
         self.min_mitotic_duration = 30 # minutes
         self.frame_interval = 10 #  time step in min
-        # Must be odd for median filtering to work
-        self.min_mitotic_duration_in_frames = self.min_mitotic_duration // self.frame_interval # number of frames
-        self.semantic_footprint = np.ones(self.min_mitotic_duration_in_frames)
+        self.min_mitotic_duration_in_frames = self.min_mitotic_duration // self.frame_interval
+
+        # Must be odd so it can be centered symmetrically on each pixel; otherwise the operation will translate the peak
+        self.semantic_gap_closing = 3 # number of frames
+        self.semantic_footprint = np.ones(self.semantic_gap_closing)
 
         # trackpy parameters
         self.max_pixel_movement = 20
