@@ -32,7 +32,7 @@ class analysis:
         ## Default parameters
         self.paths = {}  # Dictionary stores stack paths
         self.stacks = {} # Dictionary stores image stacks
-
+        self.performance = {} # Dictionary to store performance checks
         ##
         try:
             root_folder.exists()
@@ -417,15 +417,24 @@ class analysis:
             signal_storage[f'{channel}_int_corr'] = []
             signal_storage[f'{channel}_int_corr_std'] = []
 
+        # A list to store the number of peaks
+        # Multiple peaks will reveal either tracking errors or segmentation issues
+        peaks_per_trace = []  
+        # Fluctuations in the mask size will indicate segmentation quality
+        cell_area_std  = []
+
         for id in idlist:
             
             semantic = self.tracked[self.tracked.particle==id].semantic.to_numpy()
+            # Peak number before gap filling
+            _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
             # remove 0's, fill gaps.
             semantic[semantic==0] = 1
             semantic = (semantic - 1)//99
             semantic = closing(semantic, self.defaults.semantic_footprint)
             # Find peaks
             _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
+            peaks_per_trace = props["widths"].size
             
             # Only select tracks that have one peak in the semantic trace
             # This will bias the analysis to smaller mitotic durations
@@ -433,6 +442,7 @@ class analysis:
                 mitosis.append(props["widths"][0])
                 mito_start.append(props['left_bases'][0])
                 cell_area.append(self.tracked[self.tracked.particle==id].area.mean())
+                cell_area_std.append(self.tracked[self.tracked.particle==id].area.std())
                 particle.append(id)
                 track_length.append(semantic.shape[0])
                 
@@ -452,7 +462,9 @@ class analysis:
                     signal_storage[f'{channel}_int_corr'].append(int_corr)
                     signal_storage[f'{channel}_int_corr_std'].append(int_std)
                 
-        
+        self.performance["peaks_per_trace"] = peaks_per_trace
+        self.performance["cell_area_std"]   = cell_area_std
+
         # Construct summary DF
         other_storage = {
                         "particle"     : particle,
@@ -471,6 +483,7 @@ class analysis:
                 self.summaryDF.to_excel(writer,sheet_name = "Summary")
                 pd.DataFrame([self.paths]).T.to_excel(writer, sheet_name='file_data')
                 pd.DataFrame([self.defaults.__dict__]).T.to_excel(writer,sheet_name='parameters')
+                pd.DataFrame(self.performance).T.to_excel(writer, sheet_name="Performance metrics")
 
         return self.summaryDF
     
