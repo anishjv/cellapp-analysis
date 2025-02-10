@@ -1,7 +1,7 @@
 import os, tifffile
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 from skimage.io import imread # type: ignore
-from skimage.morphology import erosion
+from skimage.morphology import erosion, closing
 from skimage.filters.rank import minimum
 from skimage.measure import regionprops_table, block_reduce
 import napari # type: ignore
@@ -90,8 +90,7 @@ class analysis:
             self.paths["instance"] = Path([name for name in cellaap_dir.glob('*.tif') if "instance" in name.name][0])
             self.paths["semantic"] = Path([name for name in cellaap_dir.glob('*.tif') if "semantic" in name.name][0])
             # Keep the name stub to infer other file names
-            #self.name_stub = self.paths["instance"].name.split('_phs')[0]
-            self.name_stub = re.search(r"[A-H]([1-9]|[0][1-9]|[1][1-2])_s(\d{2}|\d{1})", str(self.paths["instance"])).group()
+            self.name_stub = re.search(r"[A-H]([1-9]|[0][1-9]|[1][0-2])_s(\d{2}|\d{1})", str(self.paths["semantic"].name)).group()
             self.expt_name = self.paths["instance"].name.split(f"{self.name_stub}")[0]
             self.defaults = analysis_pars(cell_type=cell_type)
         except:
@@ -374,6 +373,7 @@ class analysis:
                 self.tracked.to_excel(writer, sheet_name='cell_data')
                 # There are no scalars - so turn into list; transform
                 pd.DataFrame([self.paths]).T.to_excel(writer,   sheet_name='file_data')
+                pd.DataFrame([self.defaults.__dict__]).T.to_excel(writer,sheet_name='parameters')
             # self.tracked.to_excel()
 
         return self.tracked
@@ -393,11 +393,12 @@ class analysis:
         '''
         # Select only those tracks where mitosis was observed
         idlist    = list(set(self.tracked[self.tracked.mitotic==1].particle))
-        mitosis   = []
-        mito_start= []
-        cell_area = []
-        particle  = []
-        channels = []
+        mitosis   =    []
+        mito_start=    []
+        cell_area =    []
+        particle  =    []
+        track_length = []
+        channels =     []
         # Check which channels have been measured. If none, return only "mitotic duration"
         # Need to find a better way to code this.
 
@@ -417,8 +418,14 @@ class analysis:
             signal_storage[f'{channel}_int_corr_std'] = []
 
         for id in idlist:
-            semantic = self.tracked[self.tracked.particle==id].semantic
-            _, props = find_peaks(semantic, width=self.defaults.min_width)
+            
+            semantic = self.tracked[self.tracked.particle==id].semantic.to_numpy()
+            # remove 0's, fill gaps.
+            semantic[semantic==0] = 1
+            semantic = (semantic - 1)//99
+            semantic = closing(semantic, self.defaults.semantic_footprint)
+            # Find peaks
+            _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
             
             # Only select tracks that have one peak in the semantic trace
             # This will bias the analysis to smaller mitotic durations
@@ -427,16 +434,17 @@ class analysis:
                 mito_start.append(props['left_bases'][0])
                 cell_area.append(self.tracked[self.tracked.particle==id].area.mean())
                 particle.append(id)
+                track_length.append(semantic.shape[0])
                 
-           
+        
                 for channel in channels:
                     signal, bkg_corr, int_corr, signal_std, bkg_std, int_std = calculate_signal(
-                                                                  semantic, 
-                                                                  self.tracked[self.tracked.particle==id][f'{channel}'].to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id][f'{channel}_bkg_corr'].to_numpy(), 
-                                                                  self.tracked[self.tracked.particle==id][f'{channel}_int_corr'].to_numpy(),
-                                                                  self.defaults.min_width
-                                                                  )
+                                                                semantic, 
+                                                                self.tracked[self.tracked.particle==id][f'{channel}'].to_numpy(), 
+                                                                self.tracked[self.tracked.particle==id][f'{channel}_bkg_corr'].to_numpy(), 
+                                                                self.tracked[self.tracked.particle==id][f'{channel}_int_corr'].to_numpy(),
+                                                                self.defaults.semantic_footprint
+                                                                )
                     signal_storage[f'{channel}'].append(signal)
                     signal_storage[f'{channel}_std'].append(signal_std)
                     signal_storage[f'{channel}_bkg_corr'].append(bkg_corr)
@@ -447,10 +455,11 @@ class analysis:
         
         # Construct summary DF
         other_storage = {
-                        "particle"  : particle,
-                        "cell_area" : cell_area,
-                        "mito_start": mito_start,
-                        "mitosis"   : mitosis,
+                        "particle"     : particle,
+                        "track_length" : track_length,
+                        "mito_start"   : mito_start,
+                        "cell_area"    : cell_area,
+                        "mitosis"      : mitosis,
                         }
         
         summary_storage = other_storage | signal_storage
@@ -458,42 +467,48 @@ class analysis:
 
 
         if save_flag:
-            self.summaryDF.to_excel(self.cellaap_dir / Path(self.expt_name+self.name_stub+"_summary.xlsx"))
+            with pd.ExcelWriter(self.cellaap_dir / Path(self.expt_name+self.name_stub+"_summary.xlsx")) as writer: 
+                self.summaryDF.to_excel(writer,sheet_name = "Summary")
+                pd.DataFrame([self.paths]).T.to_excel(writer, sheet_name='file_data')
+                pd.DataFrame([self.defaults.__dict__]).T.to_excel(writer,sheet_name='parameters')
 
         return self.summaryDF
     
     
-    def compile_summaries(self, well_position: list) -> pd.DataFrame:
+    def compile_summaries(self, wells: list) -> pd.DataFrame:
         '''
         Collects and concatenates the summary xslx spreadsheets from the designated well_position list.
         
         Inputs:
         well : list with entries of the form r"[A-Z][dd]+_+[a-z][d+]"
         Output: 
-        data_summary  : dataframe with the data concatenated; well_pos - column designating well_pos
+        data_summary  : dataframe with the data concatenated; well - column designating well_pos
         '''
-        if well_position:
+        if wells:
             if not hasattr(self, 'inf_folder_list'):
                 # Assemble the folder list when function called for the first time
                 self.inf_folder_list = [f for f in self.root_folder.glob('*_inference')]
             
             df_list = []
-            experiment = self.root_folder.parents[-1]
-            for wp in well_position:
-                wp_string = '_'+wp+'_'
+            experiment = self.root_folder.parent
+
+            pattern = re.compile(r'_(\w\d+)_(\w\d+)_')
+
+            for well in wells:
+                wp_string = '_'+well+'_'
                 for f in self.inf_folder_list:
                     if wp_string in f.name:
                         xls_file_name = [file for file in f.glob('*_summary.xlsx')]
                         if xls_file_name:
                             df = pd.read_excel(xls_file_name[0]) #assumes only one
-                            df["well"] = wp #assign well-position identifier
-                            position = f.name.split(wp_string)[1][:2]
+                            df["well"] = well #assign well-position identifier
+                            position = pattern.findall(xls_file_name[0].name)[0][1]
                             df["position"] = position
                             df["experiment"] = experiment
                             df_list.append(df)
-                            print(f"{wp} loaded")
+                            print(f"{well}_{position} loaded")
                         else:
-                            print(f"No summary file found in {wp}")
+                            print(f"No summary file found for {well}")
 
             data_summary = pd.concat(df_list)
 
