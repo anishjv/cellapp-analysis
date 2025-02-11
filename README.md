@@ -65,6 +65,8 @@ tracks = exp_analysis.measure_signal('Cy5', save_flag = True, id = -1) #as neede
 summary = exp_analysis.summarize_data(True)
 ```
 
+**Quality metrics** - The *summarize_data* function calculate wo simple quality metrics: the number of peaks per cell track and fluctuations in cell area (standard deviation). These are stored in the *self.quality* dictionary. The number of peaks per cell track is summarized as a histogram in the excel spreadsheet in the sheet labeled "Quality". Cell area standard deviation is reported as a column vector.
+
 3.**Plotting mode**: One can create multiple objects corresponding, e.g., to multiple repeats of an experiment.
 
 ```python

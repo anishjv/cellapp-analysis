@@ -33,7 +33,7 @@ class analysis:
         ## Default parameters
         self.paths = {}  # Dictionary stores stack paths
         self.stacks = {} # Dictionary stores image stacks
-        self.performance = {} # Dictionary to store performance checks
+        self.quality = {} # Dictionary to store quality checks
         ##
         try:
             root_folder.exists()
@@ -396,9 +396,9 @@ class analysis:
         idlist    = list(set(self.tracked[self.tracked.mitotic==1].particle))
         # A list to store the number of peaks
         # Multiple peaks will reveal either tracking errors or segmentation issues
-        peaks_per_trace = np.zeros(len(idlist)) 
+        peaks_per_track = np.zeros(len(idlist)) 
         # Fluctuations in the mask size will indicate segmentation quality
-        cell_area_std  = np.zeros_like(peaks_per_trace)
+        cell_area_std  = np.zeros_like(peaks_per_track)
         mitosis   =    []
         mito_start=    []
         cell_area =    []
@@ -431,7 +431,7 @@ class analysis:
 
             # Peak number before gap filling
             _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
-            peaks_per_trace[index] = props["widths"].size
+            peaks_per_track[index] = props["widths"].size
             cell_area_std[index]   = self.tracked[self.tracked.particle==id].area.std()
 
             # Turn into Boolean
@@ -466,10 +466,10 @@ class analysis:
                     signal_storage[f'{channel}_int_corr_std'].append(int_std)
                 
         
-        n_obs, bins = np.histogram(peaks_per_trace, np.arange(0,15))
-        self.performance["peaks_per_trace"] = pd.DataFrame({"n_peaks"     : bins[:-1],
+        n_obs, bins = np.histogram(peaks_per_track, np.arange(0,15))
+        self.quality["peaks_per_track"] = pd.DataFrame({"n_peaks"     : bins[:-1],
                                                             "cell number" : n_obs})
-        self.performance["cell_area_std"]   = pd.DataFrame(cell_area_std, columns = ["Area std."])
+        self.quality["cell_area_std"]   = pd.DataFrame(cell_area_std, columns = ["Area std."])
 
         # Construct summary DF
         other_storage = {
@@ -489,8 +489,8 @@ class analysis:
                 self.summaryDF.to_excel(writer,sheet_name = "Summary", index=False)
                 pd.DataFrame([self.paths]).T.to_excel(writer, sheet_name='file_data')
                 pd.DataFrame([self.defaults.__dict__]).T.to_excel(writer,sheet_name='parameters')
-                self.performance["cell_area_std"].join(self.performance["peaks_per_trace"]).to_excel(writer, 
-                                                                           sheet_name="Performance", 
+                self.quality["cell_area_std"].join(self.quality["peaks_per_track"]).to_excel(writer, 
+                                                                           sheet_name="quality", 
                                                                            index=False)
 
         return self.summaryDF
