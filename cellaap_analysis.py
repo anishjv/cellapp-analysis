@@ -16,6 +16,7 @@ from skimage.util import img_as_uint
 from os import listdir
 from os.path import isfile, join
 import re
+from itertools import zip_longest
 
 class analysis:
     
@@ -393,6 +394,11 @@ class analysis:
         '''
         # Select only those tracks where mitosis was observed
         idlist    = list(set(self.tracked[self.tracked.mitotic==1].particle))
+        # A list to store the number of peaks
+        # Multiple peaks will reveal either tracking errors or segmentation issues
+        peaks_per_trace = np.zeros(len(idlist)) 
+        # Fluctuations in the mask size will indicate segmentation quality
+        cell_area_std  = np.zeros_like(peaks_per_trace)
         mitosis   =    []
         mito_start=    []
         cell_area =    []
@@ -417,24 +423,22 @@ class analysis:
             signal_storage[f'{channel}_int_corr'] = []
             signal_storage[f'{channel}_int_corr_std'] = []
 
-        # A list to store the number of peaks
-        # Multiple peaks will reveal either tracking errors or segmentation issues
-        peaks_per_trace = []  
-        # Fluctuations in the mask size will indicate segmentation quality
-        cell_area_std  = []
-
-        for id in idlist:
+        for index, id in enumerate(idlist):
             
             semantic = self.tracked[self.tracked.particle==id].semantic.to_numpy()
+            # remove 0's, fill gaps in the semantic vector.
+            semantic[semantic==0] = 1
+
             # Peak number before gap filling
             _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
-            # remove 0's, fill gaps.
-            semantic[semantic==0] = 1
+            peaks_per_trace[index] = props["widths"].size
+            cell_area_std[index]   = self.tracked[self.tracked.particle==id].area.std()
+
+            # Turn into Boolean
             semantic = (semantic - 1)//99
             semantic = closing(semantic, self.defaults.semantic_footprint)
             # Find peaks
             _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
-            peaks_per_trace = props["widths"].size
             
             # Only select tracks that have one peak in the semantic trace
             # This will bias the analysis to smaller mitotic durations
@@ -442,7 +446,6 @@ class analysis:
                 mitosis.append(props["widths"][0])
                 mito_start.append(props['left_bases'][0])
                 cell_area.append(self.tracked[self.tracked.particle==id].area.mean())
-                cell_area_std.append(self.tracked[self.tracked.particle==id].area.std())
                 particle.append(id)
                 track_length.append(semantic.shape[0])
                 
@@ -462,8 +465,11 @@ class analysis:
                     signal_storage[f'{channel}_int_corr'].append(int_corr)
                     signal_storage[f'{channel}_int_corr_std'].append(int_std)
                 
-        self.performance["peaks_per_trace"] = peaks_per_trace
-        self.performance["cell_area_std"]   = cell_area_std
+        
+        n_obs, bins = np.histogram(peaks_per_trace, np.arange(0,15))
+        self.performance["peaks_per_trace"] = pd.DataFrame({"n_peaks"     : bins[:-1],
+                                                            "cell number" : n_obs})
+        self.performance["cell_area_std"]   = pd.DataFrame(cell_area_std, columns = ["Area std."])
 
         # Construct summary DF
         other_storage = {
@@ -480,10 +486,12 @@ class analysis:
 
         if save_flag:
             with pd.ExcelWriter(self.cellaap_dir / Path(self.expt_name+self.name_stub+"_summary.xlsx")) as writer: 
-                self.summaryDF.to_excel(writer,sheet_name = "Summary")
+                self.summaryDF.to_excel(writer,sheet_name = "Summary", index=False)
                 pd.DataFrame([self.paths]).T.to_excel(writer, sheet_name='file_data')
                 pd.DataFrame([self.defaults.__dict__]).T.to_excel(writer,sheet_name='parameters')
-                pd.DataFrame(self.performance).T.to_excel(writer, sheet_name="Performance metrics")
+                self.performance["cell_area_std"].join(self.performance["peaks_per_trace"]).to_excel(writer, 
+                                                                           sheet_name="Performance", 
+                                                                           index=False)
 
         return self.summaryDF
     
