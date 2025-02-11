@@ -16,6 +16,7 @@ from skimage.util import img_as_uint
 from os import listdir
 from os.path import isfile, join
 import re
+from itertools import zip_longest
 
 class analysis:
     
@@ -32,7 +33,7 @@ class analysis:
         ## Default parameters
         self.paths = {}  # Dictionary stores stack paths
         self.stacks = {} # Dictionary stores image stacks
-
+        self.quality = {} # Dictionary to store quality checks
         ##
         try:
             root_folder.exists()
@@ -393,6 +394,11 @@ class analysis:
         '''
         # Select only those tracks where mitosis was observed
         idlist    = list(set(self.tracked[self.tracked.mitotic==1].particle))
+        # A list to store the number of peaks
+        # Multiple peaks will reveal either tracking errors or segmentation issues
+        peaks_per_track = np.zeros(len(idlist)) 
+        # Fluctuations in the mask size will indicate segmentation quality
+        cell_area_std  = np.zeros_like(peaks_per_track)
         mitosis   =    []
         mito_start=    []
         cell_area =    []
@@ -417,11 +423,18 @@ class analysis:
             signal_storage[f'{channel}_int_corr'] = []
             signal_storage[f'{channel}_int_corr_std'] = []
 
-        for id in idlist:
+        for index, id in enumerate(idlist):
             
             semantic = self.tracked[self.tracked.particle==id].semantic.to_numpy()
-            # remove 0's, fill gaps.
+            # remove 0's, fill gaps in the semantic vector.
             semantic[semantic==0] = 1
+
+            # Peak number before gap filling
+            _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
+            peaks_per_track[index] = props["widths"].size
+            cell_area_std[index]   = self.tracked[self.tracked.particle==id].area.std()
+
+            # Turn into Boolean
             semantic = (semantic - 1)//99
             semantic = closing(semantic, self.defaults.semantic_footprint)
             # Find peaks
@@ -453,6 +466,11 @@ class analysis:
                     signal_storage[f'{channel}_int_corr_std'].append(int_std)
                 
         
+        n_obs, bins = np.histogram(peaks_per_track, np.arange(0,15))
+        self.quality["peaks_per_track"] = pd.DataFrame({"n_peaks"     : bins[:-1],
+                                                            "cell number" : n_obs})
+        self.quality["cell_area_std"]   = pd.DataFrame(cell_area_std, columns = ["Area std."])
+
         # Construct summary DF
         other_storage = {
                         "particle"     : particle,
@@ -468,9 +486,12 @@ class analysis:
 
         if save_flag:
             with pd.ExcelWriter(self.cellaap_dir / Path(self.expt_name+self.name_stub+"_summary.xlsx")) as writer: 
-                self.summaryDF.to_excel(writer,sheet_name = "Summary")
+                self.summaryDF.to_excel(writer,sheet_name = "Summary", index=False)
                 pd.DataFrame([self.paths]).T.to_excel(writer, sheet_name='file_data')
                 pd.DataFrame([self.defaults.__dict__]).T.to_excel(writer,sheet_name='parameters')
+                self.quality["cell_area_std"].join(self.quality["peaks_per_track"]).to_excel(writer, 
+                                                                           sheet_name="quality", 
+                                                                           index=False)
 
         return self.summaryDF
     

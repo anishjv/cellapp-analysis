@@ -82,7 +82,6 @@ def mean_signal_from_mask(img: npt.NDArray, mask: npt.NDArray):
     return mean_signal
 
 
-
 def calculate_signal(semantic, signal, bkg_corr, int_corr, footprint):
     '''
     utility function for calculating signal from the given semantic, signal, and bkg traces
