@@ -397,6 +397,7 @@ class analysis:
         # A list to store the number of peaks
         # Multiple peaks will reveal either tracking errors or segmentation issues
         peaks_per_track = np.zeros(len(idlist)) 
+        peaks_after_closing = np.zeros_like(peaks_per_track)
         # Fluctuations in the mask size will indicate segmentation quality
         cell_area_std  = np.zeros_like(peaks_per_track)
         mitosis   =    []
@@ -439,7 +440,8 @@ class analysis:
             semantic = closing(semantic, self.defaults.semantic_footprint)
             # Find peaks
             _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
-            
+            peaks_after_closing[index] = props["widths"].size
+
             # Only select tracks that have one peak in the semantic trace
             # This will bias the analysis to smaller mitotic durations
             if props["widths"].size == 1:
@@ -465,10 +467,16 @@ class analysis:
                     signal_storage[f'{channel}_int_corr'].append(int_corr)
                     signal_storage[f'{channel}_int_corr_std'].append(int_std)
                 
-        
+        # Quality metrics
         n_obs, bins = np.histogram(peaks_per_track, np.arange(0,15))
-        self.quality["peaks_per_track"] = pd.DataFrame({"n_peaks"     : bins[:-1],
-                                                            "cell number" : n_obs})
+        peaks_per_track_df = pd.DataFrame({"n_peaks"     : bins[:-1],
+                                           "track number" : n_obs})
+        n_obs, bins = np.histogram(peaks_after_closing, np.arange(0,15))
+        peaks_after_closing_df = pd.DataFrame({"n_peaks_after_closing" : bins[:-1],
+                                                            "track number" : n_obs})
+        
+        self.quality["peaks_per_track"] = pd.concat([peaks_per_track_df, peaks_after_closing_df], axis=1)
+        
         self.quality["cell_area_std"]   = pd.DataFrame(cell_area_std, columns = ["Area std."])
 
         # Construct summary DF
