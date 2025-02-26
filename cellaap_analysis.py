@@ -49,7 +49,7 @@ class analysis:
         ## Check for and set path names for correction maps
         # These maps are loaded with the root directory because they apply to all 
         # segmentations in the root directory.
-        self.intensity_map_present = False
+        self.intensity_map_present  = False
         self.background_map_present = False
         
         if not plotting_only:
