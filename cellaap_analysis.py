@@ -53,31 +53,35 @@ class analysis:
         self.background_map_present = False
         
         if not plotting_only:
-            paths = [os.path.join(dirpath,f) for (dirpath, _, filenames) in os.walk(self.root_folder) for f in filenames]
-            maps_types_chnls = [
-                (
-                    name, re.search(r"background|intensity", name).group(), re.search(r"GFP|Texas Red|Cy5|phs", name).group()
-                    ) for name in paths if re.search(r"background|intensity", name)
-                ]
-            for name, type, channel_name in maps_types_chnls:
-                if channel_name  == "Texas Red":
-                    channel_name = "Texas_Red"
-
-                match type:
-                    case "intensity":
-                        self.paths["intensity_map"] = Path(name)
-                        self.stacks[channel_name + "_intensity_map"] = tifffile.imread(Path(name))
-                        self.intensity_map_present = True
-                        print(f"{name} used as the {channel_name} intensity map")
-
-                    case "background":
-                        self.paths["background_map"] = Path(name)
-                        self.stacks[channel_name+"_background_map"] = imread(Path(name))
-                        self.background_map_present = True
-                        print(f"{name} used as the {channel_name} background map")
+            self._load_maps()
         else:
             print(f"Opening {root_folder} in plotting only mode.")
 
+    def _load_maps(self, ):
+        '''
+        Function to detect and load background and intensity correction maps from the root folder
+        '''
+        paths = [os.path.join(dirpath,f) for (dirpath, _, filenames) in os.walk(self.root_folder) for f in filenames]
+        maps_types_chnls = [
+            (
+                name, re.search(r"background|intensity", name).group(), re.search(r"GFP|Texas Red|Cy5|phs", name).group()
+                ) for name in paths if re.search(r"background|intensity", name)
+            ]
+        for name, type, channel_name in maps_types_chnls:
+            # if channel_name  == "Texas Red":
+            #     channel_name = "Texas_Red"
+            match type:
+                case "intensity":
+                    self.paths[channel_name + "_intensity_map"]  = Path(name)
+                    self.stacks[channel_name + "_intensity_map"] = tifffile.imread(Path(name))
+                    self.intensity_map_present = True
+                    print(f"{name} used as the {channel_name} intensity map")
+
+                case "background":
+                    self.paths[channel_name + "_background_map"]  = Path(name)
+                    self.stacks[channel_name + "_background_map"] = imread(Path(name))
+                    self.background_map_present = True
+                    print(f"{name} used as the {channel_name} background map")
 
     def files(self, cellaap_dir: Path, cell_type: str):
         '''
@@ -107,7 +111,7 @@ class analysis:
         for name in valid_paths:
             channel = re.search(r"GFP|Texas Red|Cy5|phs", name)
             if channel:
-                print(f"{str(name)} can be used for analysis and display")
+                print(f"{str(name)} can be used for analysis or display")
                 match channel.group():
                     case "phs":
                         self.paths["phase"] = Path(name)
@@ -152,7 +156,7 @@ class analysis:
             if type(value) is PurePosixPath or PureWindowsPath or Path:
                 if "intensity" in key:
                     intensity_map_name = value.parent / Path(value.stem + "_intensity_map.tif")
-                    channel_map = value.stem.split('_')[-1] + "_intensity_map.tif"
+                    channel_map = value.stem.split('_')[-1] + "_intensity_map"
                     self.stacks[channel_map] = gen_intensity_correction_map(imread(str(value)))
                     tifffile.imsave(intensity_map_name, self.stacks[channel_map].astype(np.float16))
                     self.paths[channel_map] = intensity_map_name
@@ -160,7 +164,7 @@ class analysis:
 
                 elif "background" in key:
                     background_map_name = value.parent / Path(value.stem + "_background_map.tif")
-                    channel_map = value.stem.split('_')[-1] + "_background_map.tif"
+                    channel_map = value.stem.split('_')[-1] + "_background_map"
                     self.stacks[channel_map] = gen_background_correction_map(imread(str(value)))
                     tifffile.imsave(background_map_name, self.stacks[channel_map].astype(np.int16))
                     self.paths[channel_map] = background_map_name
@@ -168,9 +172,8 @@ class analysis:
             
             else:
                 print(f"Dictionary values must be Path objects; try again.")
-
+        self._load_maps()
         return
-
 
 
     def track_centroids(self, save_flag: False, memory = None, max_pixel_movement = None) -> pd.DataFrame:
