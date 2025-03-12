@@ -427,8 +427,8 @@ class analysis:
 
         if "GFP" in self.tracked.columns:
             channels.append('GFP')
-        if "Texas_Red" in self.tracked.columns:
-            channels.append("Texas_Red")
+        if "Texas Red" in self.tracked.columns:
+            channels.append("Texas Red")
         if "Cy5" in self.tracked.columns:
             channels.append("Cy5")
         signal_storage = {}

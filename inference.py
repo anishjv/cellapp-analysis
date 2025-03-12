@@ -22,7 +22,7 @@ def get_model(model_name: str):
         cellaap_widget: instance of ui.cellAAPWidget()I
     """
 
-    models = ['HeLa', 'U2OS']
+    models = ['HeLa', 'U2OS', "HeLa_oof", "U2OS_new", "U2OS_l"]
     try:
         assert model_name in models
     except AssertionError:
@@ -30,7 +30,10 @@ def get_model(model_name: str):
 
     url_registry = {
         "HeLa": "doi:10.5281/zenodo.14226948",
-        "U2OS": "doi:10.5281/zenodo.14226985"
+        "U2OS": "doi:10.5281/zenodo.14226985",
+        "HeLa_oof": "doi:10.5281/zenodo.14884515",
+        "U2OS_new": "doi:10.5281/zenodo.14969500",
+        "U2OS_l": "doi:10.5281/zenodo.14969500"
     }
 
     weights_registry = {
@@ -41,6 +44,18 @@ def get_model(model_name: str):
         "U2OS": (
             "model_0030449.pth",
             "md5:4d65600b92560d7fcda6c6fd59fa0fe8"
+        ),
+        "HeLa_oof": (
+            "model_0004349.pth",
+            "md5:01ac361196356fe1d7a1fb2c125ad2f5"
+        ),
+        "U2OS_new": (
+            "model_0034799.pth",
+            "md5:9a1d6fdf47e3cfbc909a5c9a275b3838"
+        ),
+        "U2OS_l": (
+            "model_0034799.pth",
+            "md5:9a1d6fdf47e3cfbc909a5c9a275b3838"
         )
     }
 
@@ -53,6 +68,21 @@ def get_model(model_name: str):
         "U2OS" : (
             "config.yaml",
             "md5:ad80d579860c53a84ab076c4db2604fd",
+            "lazy"
+        ),
+        "HeLa_oof": (
+            "config.yaml",
+            "md5:eb68946e8f8a1676b3a7bfc8c235d1db",
+            "lazy"
+        ),
+        "U2OS_new": (
+            "config.yaml",
+            "md5:b20065699f593e406fa30d5fa3bc0085",
+            "lazy"
+        ),
+        "U2OS_l": (
+            "config2.yaml",
+            "md5:18066db05103a9fc38da1b6c05366019",
             "lazy"
         )
     }
