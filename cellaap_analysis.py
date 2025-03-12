@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import trackpy as tp
 import scipy.ndimage as ndi
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, medfilt
 from analysis_pars import analysis_pars
 from cellaap_utils import *
 from skimage.util import img_as_uint
@@ -244,9 +244,20 @@ class analysis:
                                                       self.tracked.loc[i,"y"]])
         self.tracked["semantic"] = semantic_label
 
+        # remove 0's and 2's, and fill gaps in the semantic vector.
+        self.tracked.loc[self.tracked.semantic < 100, "semantic"] = 1
+
+        self.tracked.loc[:, "semantic"] = medfilt(self.tracked.semantic,
+                                                  self.defaults.semantic_gap_closing)
+
+        # Turn into Boolean
+        semantic_smoothed = (self.tracked.semantic - 1)//99
+        semantic_smoothed = closing(semantic_smoothed, 
+                                    self.defaults.semantic_footprint)
+        self.tracked["semantic_smoothed"] = semantic_smoothed
+        
         # classify the cells as dividing or non-dividing
         # observed division = 1; no division = 0
-
         for id in list(set(self.tracked.particle)):
             index  = self.tracked[self.tracked.particle==id].index
 
@@ -318,7 +329,8 @@ class analysis:
             elif type(id) == list:
                 id_list = id
         else:
-            id_list = list(set(self.tracked[self.tracked.mitotic==1].particle))
+            id_list = sorted(list(set(self.tracked[self.tracked.mitotic==1].particle)))
+            print(f"{len(id_list)} tracks to process")
         
         # Default values for all entries
         self.tracked[channel] = np.nan
@@ -328,19 +340,19 @@ class analysis:
         
         for id in id_list:
             print(f"Processing cell #{id}...")
-            semantic = self.tracked[self.tracked.particle==id].semantic.to_list()
+
             # Measurement decision
-            measure_cell = False
-            if len(semantic) == self.max_timepoints:
-                if semantic[0] == 1 & semantic[-1] == 1:
-                    measure_cell = True
-                else:
-                    print(f"cell #{id} not measured; mitotic at start or end")
-            else:
-                if semantic[0] == 1:
-                    measure_cell = True
-                else:
-                    print(f"cell #{id} not measured; mitotic at start")
+            measure_cell = True
+            # if len(semantic) == self.max_timepoints:
+            #     if semantic[0] == 1 & semantic[-1] == 1:
+            #         measure_cell = True
+            #     else:
+            #         print(f"cell #{id} not measured; mitotic at start or end")
+            # else:
+            #     if semantic[0] == 1:
+            #         measure_cell = True
+            #     else:
+            #         print(f"cell #{id} not measured; mitotic at start")
             
             if measure_cell:
                 frames = self.tracked[self.tracked.particle==id].frame.tolist()
@@ -397,12 +409,13 @@ class analysis:
         '''
         # Select only those tracks where mitosis was observed
         idlist    = list(set(self.tracked[self.tracked.mitotic==1].particle))
+        
         # A list to store the number of peaks
         # Multiple peaks will reveal either tracking errors or segmentation issues
         peaks_per_track = np.zeros(len(idlist)) 
-        peaks_after_closing = np.zeros_like(peaks_per_track)
         # Fluctuations in the mask size will indicate segmentation quality
         cell_area_std  = np.zeros_like(peaks_per_track)
+
         mitosis   =    []
         mito_start=    []
         cell_area =    []
@@ -429,21 +442,12 @@ class analysis:
 
         for index, id in enumerate(idlist):
             
-            semantic = self.tracked[self.tracked.particle==id].semantic.to_numpy()
-            # remove 0's, fill gaps in the semantic vector.
-            semantic[semantic==0] = 1
+            semantic = self.tracked[self.tracked.particle==id].semantic_smoothed.to_numpy()
 
             # Peak number before gap filling
             _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
             peaks_per_track[index] = props["widths"].size
             cell_area_std[index]   = self.tracked[self.tracked.particle==id].area.std()
-
-            # Turn into Boolean
-            semantic = (semantic - 1)//99
-            semantic = closing(semantic, self.defaults.semantic_footprint)
-            # Find peaks
-            _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
-            peaks_after_closing[index] = props["widths"].size
 
             # Only select tracks that have one peak in the semantic trace
             # This will bias the analysis to smaller mitotic durations
@@ -454,7 +458,6 @@ class analysis:
                 particle.append(id)
                 track_length.append(semantic.shape[0])
                 
-        
                 for channel in channels:
                     signal, bkg_corr, int_corr, signal_std, bkg_std, int_std = calculate_signal(
                                                                 semantic, 
@@ -474,12 +477,8 @@ class analysis:
         n_obs, bins = np.histogram(peaks_per_track, np.arange(0,15))
         peaks_per_track_df = pd.DataFrame({"n_peaks"     : bins[:-1],
                                            "track number" : n_obs})
-        n_obs, bins = np.histogram(peaks_after_closing, np.arange(0,15))
-        peaks_after_closing_df = pd.DataFrame({"n_peaks_after_closing" : bins[:-1],
-                                                            "track number" : n_obs})
         
-        self.quality["peaks_per_track"] = pd.concat([peaks_per_track_df, peaks_after_closing_df], axis=1)
-        
+        self.quality["peaks_per_track"] = peaks_per_track_df
         self.quality["cell_area_std"]   = pd.DataFrame(cell_area_std, columns = ["Area std."])
 
         # Construct summary DF

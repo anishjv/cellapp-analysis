@@ -88,22 +88,22 @@ def calculate_signal(semantic, signal, bkg_corr, int_corr, footprint):
     '''
     
     if signal.any():
-        signal_mean = np.mean(signal[np.where(semantic)])
-        signal_std = np.std(signal[np.where(semantic)])
+        signal_mean = np.nanmean(signal[np.where(semantic)])
+        signal_std = np.nanstd(signal[np.where(semantic)])
     else:
         signal_mean = 0
         signal_std = 0
     
     if bkg_corr.any():
-        bkg_corr_mean = np.mean(bkg_corr[np.where(semantic)])
-        bkg_corr_std = np.std(bkg_corr[np.where(semantic)])
+        bkg_corr_mean = np.nanmean(bkg_corr[np.where(semantic)])
+        bkg_corr_std = np.nanstd(bkg_corr[np.where(semantic)])
     else:
         bkg_corr_mean = 0
         bkg_corr_std = 0
 
     if int_corr.any():
-        int_corr_mean = np.mean(int_corr[np.where(semantic)])
-        int_corr_std = np.std(int_corr[np.where(semantic)])
+        int_corr_mean = np.nanmean(int_corr[np.where(semantic)])
+        int_corr_std = np.nanstd(int_corr[np.where(semantic)])
     else:
         int_corr_mean = 1
         int_corr_std = 0
