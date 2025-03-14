@@ -118,7 +118,7 @@ class analysis:
                     case "GFP":
                         self.paths["GFP"] = Path(name)
                     case "Texas Red":
-                        self.paths["Texas_Red"] = Path(name)
+                        self.paths["Texas Red"] = Path(name)
                     case 'Cy5':
                         self.paths["Cy5"] = Path(name)
                 
@@ -308,8 +308,8 @@ class analysis:
         except:
             raise ValueError(f"")
         
-        if channel == "Texas Red":
-            channel = "Texas_Red"
+        # if channel == "Texas Red":
+        #     channel = "Texas_Red"
         
         # Read image stack
         channel_stack = imread(self.paths[channel])
