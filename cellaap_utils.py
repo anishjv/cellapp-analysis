@@ -111,6 +111,16 @@ def calculate_signal(semantic, signal, bkg_corr, int_corr, footprint):
     return signal_mean, bkg_corr_mean, int_corr_mean, signal_std, bkg_corr_std, int_corr_std
 
 
+def calculate_displacement(coords: pd.DataFrame) -> float:
+    '''
+    Function calculates the absolute displacement from frame to frame
+    '''
+    pixel_shift = coords.diff()
+    displacement = np.sqrt(pixel_shift.x**2 + pixel_shift.y**2)
+
+    return displacement
+
+
 def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size = None) -> (pd.DataFrame, dict): # type: ignore
     '''
     Function to fit the dose-response data with a 4-parameter sigmoid.
