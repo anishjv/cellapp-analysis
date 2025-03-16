@@ -31,7 +31,7 @@ class analysis_pars:
 
         # trackpy parameters
         self.max_pixel_movement = 20
-        self.tracking_memory    = 2
+        self.tracking_memory    = 1
         self.min_track_length   = 10 # min track length
 
         self.track_mode = "vanilla"
@@ -49,7 +49,7 @@ class analysis_pars:
             self.track_mode = "predictive"
 
         if cell_type.lower() == "rpe1":
-            self.max_pixel_movement = 30
+            self.max_pixel_movement = 20
             self.max_cell_size = 9500
             self.adaptive_tracking = True
             self.track_mode = "predictive"

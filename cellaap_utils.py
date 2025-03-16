@@ -149,7 +149,7 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
     # 
     if bin_size is None:
         bin_size = 2.5
-    bins   = np.arange(quants[0], 1.3*quants[-1], bin_size)
+    bins   = np.arange(0.5*quants[0], 1.5*quants[-1], bin_size)
 
     labels, _ = pd.cut(xy_data.iloc[:, 0], bins, retbins=True)
     xy_data["bins"] = labels

@@ -106,7 +106,7 @@ class analysis:
         image_paths = list(self.data_dir.glob('*.tif')) + list(self.data_dir.glob('*.tiff'))
         image_paths = map(str, image_paths)
         valid_paths = [
-            name for name in image_paths if re.search(r"(.tif|.tiff)", name) and str(self.name_stub) in name
+            name for name in image_paths if re.search(r"(.tif|.tiff)", name) and self.name_stub+"_" in name
         ]
         for name in valid_paths:
             channel = re.search(r"GFP|Texas Red|Cy5|phs", name)
@@ -219,7 +219,7 @@ class analysis:
         match mode:
 
             case "predictive":
-                tp.linking.Linker.MAX_SUB_NET_SIZE = 40
+                # tp.linking.Linker.MAX_SUB_NET_SIZE = 40
                 track_pred = tp.predict.NearestVelocityPredict()
                 self.tracked = track_pred.link_df(track_table,
                                                   max_pixel_movement, 
