@@ -157,8 +157,8 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
     bin_means = xy_data.groupby("bins").mean()
     bin_sizes = xy_data.groupby("bins").size()
     bin_stderrs = xy_data.groupby("bins").std()
-    bin_stderrs.iloc[:,0] /= bin_sizes
-    bin_stderrs.iloc[:,1] /= bin_sizes
+    bin_stderrs.iloc[:,0] /= bin_sizes**0.5
+    bin_stderrs.iloc[:,1] /= bin_sizes**0.5
     bin_means.dropna(inplace=True) # Some of the bins may not have any data
     bin_stderrs.dropna(inplace=True)
     
@@ -187,7 +187,7 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
                    'EC50'         : fits[3]
                  }
     
-    return xy_data, bin_means, bin_stderrs, fit_values
+    return xy_data, bin_means, bin_stderrs, bin_sizes, fit_values
 
 def sigmoid_4par(x, base, top, exponent, ec50):
 
