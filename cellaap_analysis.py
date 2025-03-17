@@ -287,17 +287,40 @@ class analysis:
     
     def _display_tracks(self, img_stack = None):
         '''
+        Opens a napari viewer displaying the phase stack overlayed with
+        semantic segmentation and tracking data.
+        If a string corresponding to an existing phase path is provided, 
+        then the function infers the names of the inference folder, inference
+        stack and the _analysis.xlsx file to create the overlays.
+        Function assumes that all files exist and are appropriately named.
         '''
         if "viewer" not in self.__dict__.keys():
             self.viewer = napari.Viewer()
         
-        if img_stack is None:
-            self.stacks["phase"] = imread(self.paths["phase"])
-            phase_binned = np.zeros_like(self.stacks["instance"], dtype=int)
-            for i in np.arange(phase_binned.shape[0]):
-                phase_binned[i,:,:]=block_reduce(self.stacks["phase"][i,:,:,],block_size=(2,2), func=np.max)
-        else:
-            pass
+        if img_stack is not None:
+            # Create Path object for the file
+            self.paths["phase"] = self.root_folder / Path(img_stack)
+            # Create Path for the inference folder
+            inf_folders = self.root_folder.glob("*_inference")
+            self.name_stub = re.search(r"[A-H]([1-9]|[0][1-9]|[1][0-2])_s(\d{2}|\d{1})", 
+                                       str(self.paths["phase"].name)).group()
+            for folder in self.root_folder.glob("*_inference"):
+                if self.name_stub+"_" in folder.name:
+                    self.cellaap_dir = folder
+                    semantic_file = [name for name in folder.glob("*semantic.tif")][0]
+                    excel_file = [name for name in folder.glob("*analysis.xlsx")][0]
+                    print(f"found {semantic_file} and {excel_file}")
+                    self.paths["semantic"] = semantic_file
+                    self.stacks["semantic"] = imread(semantic_file)
+                    self.tracked = pd.read_excel(excel_file)
+
+        self.stacks["phase"] = imread(self.paths["phase"])
+        shape = self.stacks["phase"].shape
+        binned_shape = (shape[0], shape[1]//2, shape[2]//2)
+        phase_binned = np.zeros(binned_shape, dtype=int)
+        for i in np.arange(phase_binned.shape[0]):
+            phase_binned[i,:,:]=block_reduce(self.stacks["phase"][i,:,:,],
+                                             block_size=(2,2), func=np.max)
 
         self.viewer.add_image(phase_binned)
         self.viewer.add_labels(self.stacks["semantic"])
