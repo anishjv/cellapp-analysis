@@ -24,8 +24,8 @@ If present, these stacks will be loaded. The analysis object can also create the
 ```python
 map_dict = {'GFP_background': Path(GFP_fluorobrite_stk),
             'GFP_intensity' : Path(GFP_DMEM_stk), 
-            'TR_background': Path(TRed_fluorobrite_stk),
-            'TR_intensity':Path(TRed_DMEM_stk)}
+            'TRed_background': Path(TRed_fluorobrite_stk),
+            'TRed_intensity':Path(TRed_DMEM_stk)}
 
 exp_analysis.create_correction_maps(map_dict)
 ```
@@ -37,24 +37,29 @@ These are set by the **analysis_pars** class. If necessary, you can change them 
 
 The main parameters relate to trackpy configuration:
 
-1. max_cell_size = 5000 (pixels) - larger segments are filtered out. This needs to be changed for large cells or cells that tend to spread out.
-2. max_pixel_movement (pixels) - the search radius for trackpy. Depends on whether or not the cells crawl. It's set at 20 pixels for Hela, 30 for U2OS/RPE1, and 50 for RPE1.
-3. adaptive_tracking (T/F) - Enabled to reduce the chances of trackpy optimization crashing through some combination of a large search raidus and cell density.
+1. max_cell_size = 9500 (pixels) - larger segments are filtered out. This needs to be changed for large cells or cells that tend to spread out.
+2. max_pixel_movement (pixels) - the search radius for trackpy. Depends on whether or not the cells crawl. It's set at 20 pixels for Hela, 22 for U2OS/RPE1/HT1080.
+3. track_mode - "vanilla" (for cells that don't move much at all, e.g. HeLa)
+                "predictive" (for cells that move; all the rest)
+                "adaptive" (could be used for cells that move)
 4. min_track_length = 10: Only cells tracked for > 10 timepoints are analyzed.
-5. memory = 2: tracking memory in timepoints
-6. min_mitotic_duration = 2: (unrelated to trackpy); mitotic events smaller than 2 timepoints are filtered out.
+5. memory = 1: tracking memory in timepoints
+6. min_mitotic_duration = 3: (unrelated to trackpy); mitotic events smaller than 3 timepoints are filtered out.
+
+Be careful when using the "predictive" tracking mode. It's very powerful, but can be computationally costly if the tracking memory>1 and max. pixel movement is > 25. This will lead to trackpy exceeding the max. number of nodes in one or more subnetworks. Currenlty, trackpy just exits on this error, which can be problematic when analysis is being done in batch mode. If you come across this issue, gradually decrease the max. pixel movement parameter to get under this error.
 
 **Step 1:** Point the analysis object to a specific inference folder by providing a path to it. This will read the instance segmentation file from this folder.
 
-**Step 2:** Use the **track_centroids** method; it will erode the instance segmentation with the default footprint (needs to be customized for different cells), track the resultant masks using trackpy, and then determine the cell-state by reading the semantic stack. The intermediate padas dataframe can be saved to excel using the flag. Currently, the 'HeLa' input does not do anything; the plan is to use cell-line-specific parameters for trackpy (e.g., when some cells crawl around)
+**Step 2:** Use the **track_centroids** method; it will erode the instance segmentation with the default footprint (needs to be customized for different cells), track the resultant masks using trackpy, and then determine the cell-state by reading the semantic stack. The intermediate padas dataframe can be saved to excel using the flag. See the notes above regarding optimal tracking parameters. 
+
+*It seems that trackpy is using 32-bit integers for assigning labels to individual points. Overrun of this number leads to missing signal measurements, which shouldn't be a big issue. But this needs to be adddressed at some point.*
 
 **Step 3:** Use the **measure_signal** function to measure the fluorescence from the specified channel. The channel string must match the channel name in the file names. The "id = -1" will make the function measure data for all cells that went through a complete mitosis during the time lapse. Optionally, one can provide a list with cell numbers (development only). Thus, cells that remained in interphase throughout the experiment are not measured. Their tracks are still reported.
 
 **Step 4:** Use the **summarize_data** function to create the summary Excel file that lists the average signals measured for all channels, duraion of mitosis, and the correction factors to account for background and excitation intensity variation. Before computing the summary measurements, **any gaps in the semantic label vector are filling by "closing" with a footprint (semantic_footprint) with width equal to the minimum mitotic duration (min_mitotic_duration = 3). Only gaps < 3 frames are filled.**
-This function introduces two filters:
+Any cell that shows multiple peaks in the semantic label vector (after median filtering) is also not summarized.
 
-1. Any cell that is in mitosis at the beginning or end of the movie is not summarized.
-2. Any cell that shows multiple peaks in the semantic label vector (after median filtering) is also not summarized.
+**Important**: When cells are moving around, it is quite common to lose track of a mitotic cell right after it divides. This leads to a significant number of tracks that end in mitosis. These need not be discarded, especially given that cellapp labels anaphase cells as mitotic making it unlikely that a track ending in mitosis is somehow erroneous. The find_peaks function from scipy ignores peaks that persist till the end. Thus, tracks that end in mitosis are ignored by the find_peaks function. To avoid this, I am adding fantom semantic values at the end of each track (set to 0 - i.e. non-mitotic) before the values are input into the find_peaks function. This recovers the mitotic duration from these tracks.
 
 ```python
 exp_analysis.files(Path(to_inference_folder), cell_type = "HeLa")
