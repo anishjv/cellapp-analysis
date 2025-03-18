@@ -481,7 +481,7 @@ class analysis:
             semantic = self.tracked[self.tracked.particle==id].semantic_smoothed.to_numpy()
 
             # To include cells that were in mitosis at the end of the movie
-            _, props = find_peaks(np.append(semantic,1), 
+            _, props = find_peaks(np.append(semantic,np.zeros(3)), 
                                   width=self.defaults.min_mitotic_duration_in_frames)
             peaks_per_track[index] = props["widths"].size
             cell_area_std[index]   = self.tracked[self.tracked.particle==id].area.std()
