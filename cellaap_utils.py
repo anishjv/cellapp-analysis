@@ -7,7 +7,7 @@ from scipy.signal import medfilt
 import pandas as pd
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
-
+import seaborn as sns
 
 def projection(im_array: np.ndarray, projection_type: str):
 
@@ -171,21 +171,37 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
                         maxfev = 10000
                        )
 
-
-    if plot:
-        plt.plot(xy_data.iloc[:,0], xy_data.iloc[:,1], 'r.')
-        plt.plot(bin_means.iloc[:,0], bin_means.iloc[:,1], 'bo', 25)
-        plt.plot(np.arange(0,1.5*quants[-1]), sigmoid_4par(np.arange(0,1.5*quants[-1]),
-                                       fits[0], fits[1], fits[2], fits[3]), 'b-')
-        # plt.errorbar(bin_means.iloc[:,0], bin_means.iloc[:,1], 
-        #              yerr=2*bin_stderrs.iloc[:, 1], 
-        #              xerr=2*bin_stderrs.iloc[:, 0], mfc='g')
-    
     fit_values = { 'min_duration' : fits[0],
                    'max_duration' : fits[1],
                    'Hill_exponent': fits[2],
                    'EC50'         : fits[3]
                  }
+    if plot:
+        fig, ax = plt.subplots(1,1, figsize=(8,6))
+        sns.scatterplot(x=xy_data.iloc[:,0], y=xy_data.iloc[:,1], 
+                        ax=ax, alpha=0.1, 
+                        color="gray", edgecolor="None", size=1, 
+                        )
+
+        sns.scatterplot(x = bin_means.iloc[:,0], y = bin_means.iloc[:,1], 
+                        color='w', edgecolor="blue", marker='s', linewidth=1,
+                        label = "binned mean values")
+        
+        x_range = np.arange(0,1.5*quants[-1])
+        sns.lineplot(x=x_range, y=sigmoid_4par(x_range,
+                                               fit_values['min_duration'],
+                                               fit_values['max_duration'],
+                                               fit_values["Hill_exponent"],
+                                               fit_values["EC50"]),
+                                               ax = ax,
+                                               markers='',
+                                               color='b',
+                                               label="Hill sigmoid fit")
+        ax.set_xlabel("eSAC dosage (a.u.)")
+        ax.set_ylabel("Time in mitosis (x 10 min)")
+        ax.set_xlim(xmax=x_range[-1], xmin=x_range[0])
+        y_quant = np.round(xy_data.iloc[:,1].quantile(0.99))
+        ax.set_ylim([0, y_quant])
     
     return xy_data, bin_means, bin_stderrs, bin_sizes, fit_values
 

@@ -220,7 +220,7 @@ class analysis:
 
             case "predictive":
                 # tp.linking.Linker.MAX_SUB_NET_SIZE = 40
-                track_pred = tp.predict.NearestVelocityPredict()
+                track_pred = tp.predict.NearestVelocityPredict(span=3)
                 self.tracked = track_pred.link_df(track_table,
                                                   max_pixel_movement, 
                                                   memory=memory)
@@ -339,11 +339,11 @@ class analysis:
         save_flag - Whether to export dataframe as xlsx
         id        - ID of the cell (assigned by trackpy); -1 will analyze all cells
         '''
-        try:
-            if channel in []:
-                pass
-        except:
-            raise ValueError(f"")
+        # try:
+        #     if channel in []:
+        #         pass
+        # except:
+        #     raise ValueError(f"")
         
         # Read image stack
         channel_stack = imread(self.paths[channel])
@@ -373,20 +373,10 @@ class analysis:
         
         
         for id in id_list:
-            print(f"Processing cell #{id}...")
-
+            
             # Measurement decision
             measure_cell = True
-            # if len(semantic) == self.max_timepoints:
-            #     if semantic[0] == 1 & semantic[-1] == 1:
-            #         measure_cell = True
-            #     else:
-            #         print(f"cell #{id} not measured; mitotic at start or end")
-            # else:
-            #     if semantic[0] == 1:
-            #         measure_cell = True
-            #     else:
-            #         print(f"cell #{id} not measured; mitotic at start")
+            print(f"Processing cell #{id}...")
             
             if measure_cell:
                 frames = self.tracked[self.tracked.particle==id].frame.tolist()
