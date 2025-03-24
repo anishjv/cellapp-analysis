@@ -39,17 +39,14 @@ class analysis_pars:
         if cell_type.lower() == "ht1080":
             self.max_pixel_movement = 30
             self.max_cell_size = 9000
-            self.adaptive_tracking = False
             self.track_mode = "predictive"
 
         if cell_type.lower() == "u2os":
             self.max_pixel_movement = 30
             self.max_cell_size = 9500
-            self.adaptive_tracking = False
             self.track_mode = "predictive"
 
         if cell_type.lower() == "rpe1":
-            self.max_pixel_movement = 20
+            self.max_pixel_movement = 30
             self.max_cell_size = 9500
-            self.adaptive_tracking = True
             self.track_mode = "predictive"

@@ -222,7 +222,9 @@ class analysis:
                 # tp.linking.Linker.MAX_SUB_NET_SIZE = 40
                 track_pred = tp.predict.NearestVelocityPredict(span=3)
                 self.tracked = track_pred.link_df(track_table,
-                                                  max_pixel_movement, 
+                                                  max_pixel_movement,
+                                                  adaptive_stop=10, 
+                                                  adaptive_step=0.9, 
                                                   memory=memory)
 
             case "adaptive":
