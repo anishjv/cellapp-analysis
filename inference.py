@@ -22,7 +22,7 @@ def get_model(model_name: str):
         cellaap_widget: instance of ui.cellAAPWidget()I
     """
 
-    models = ['HeLa', 'U2OS', "HeLa_oof", "U2OS_new", "U2OS_l"]
+    models = ['HeLa', 'U2OS', "HeLa_oof", "U2OS_new", "U2OS_l", "U2OS_0.7"]
     try:
         assert model_name in models
     except AssertionError:
