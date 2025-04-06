@@ -208,3 +208,14 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
 def sigmoid_4par(x, base, top, exponent, ec50):
 
     return base + (top - base)*(x**exponent)/(x**exponent+ec50**exponent)
+
+
+def filter_summary_df(summary_df: pd.DataFrame, end_frame: int) -> pd.DataFrame:
+    '''
+    Function removes summary entries wherein mitosis starts at 0 or
+    ends in the last frame of the movie.
+    '''
+    filtered_df = summary_df[summary_df["mito_start"]>0].copy()
+    filtered_df = filtered_df[filtered_df["mitosis"]+filtered_df["mito_start"] < end_frame]
+
+    return filtered_df
