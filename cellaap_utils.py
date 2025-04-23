@@ -7,7 +7,7 @@ from scipy.signal import medfilt
 import pandas as pd
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
-
+import seaborn as sns
 
 def projection(im_array: np.ndarray, projection_type: str):
 
@@ -88,27 +88,37 @@ def calculate_signal(semantic, signal, bkg_corr, int_corr, footprint):
     '''
     
     if signal.any():
-        signal_mean = np.mean(signal[np.where(semantic)])
-        signal_std = np.std(signal[np.where(semantic)])
+        signal_mean = np.nanmean(signal[np.where(semantic)])
+        signal_std = np.nanstd(signal[np.where(semantic)])
     else:
         signal_mean = 0
         signal_std = 0
     
     if bkg_corr.any():
-        bkg_corr_mean = np.mean(bkg_corr[np.where(semantic)])
-        bkg_corr_std = np.std(bkg_corr[np.where(semantic)])
+        bkg_corr_mean = np.nanmean(bkg_corr[np.where(semantic)])
+        bkg_corr_std = np.nanstd(bkg_corr[np.where(semantic)])
     else:
         bkg_corr_mean = 0
         bkg_corr_std = 0
 
     if int_corr.any():
-        int_corr_mean = np.mean(int_corr[np.where(semantic)])
-        int_corr_std = np.std(int_corr[np.where(semantic)])
+        int_corr_mean = np.nanmean(int_corr[np.where(semantic)])
+        int_corr_std = np.nanstd(int_corr[np.where(semantic)])
     else:
         int_corr_mean = 1
         int_corr_std = 0
 
     return signal_mean, bkg_corr_mean, int_corr_mean, signal_std, bkg_corr_std, int_corr_std
+
+
+def calculate_displacement(coords: pd.DataFrame) -> float:
+    '''
+    Function calculates the absolute displacement from frame to frame
+    '''
+    pixel_shift = coords.diff()
+    displacement = np.sqrt(pixel_shift.x**2 + pixel_shift.y**2)
+
+    return displacement
 
 
 def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size = None) -> (pd.DataFrame, dict): # type: ignore
@@ -139,7 +149,7 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
     # 
     if bin_size is None:
         bin_size = 2.5
-    bins   = np.arange(quants[0], 1.3*quants[-1], bin_size)
+    bins   = np.arange(0.5*quants[0], 1.5*quants[-1], bin_size)
 
     labels, _ = pd.cut(xy_data.iloc[:, 0], bins, retbins=True)
     xy_data["bins"] = labels
@@ -147,8 +157,8 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
     bin_means = xy_data.groupby("bins").mean()
     bin_sizes = xy_data.groupby("bins").size()
     bin_stderrs = xy_data.groupby("bins").std()
-    bin_stderrs.iloc[:,0] /= bin_sizes
-    bin_stderrs.iloc[:,1] /= bin_sizes
+    bin_stderrs.iloc[:,0] /= bin_sizes**0.5
+    bin_stderrs.iloc[:,1] /= bin_sizes**0.5
     bin_means.dropna(inplace=True) # Some of the bins may not have any data
     bin_stderrs.dropna(inplace=True)
     
@@ -161,24 +171,51 @@ def fit_model(xy_data: pd.DataFrame, plot: True, quant_fraction = None, bin_size
                         maxfev = 10000
                        )
 
-
-    if plot:
-        plt.plot(xy_data.iloc[:,0], xy_data.iloc[:,1], 'r.')
-        plt.plot(bin_means.iloc[:,0], bin_means.iloc[:,1], 'bo', 25)
-        plt.plot(np.arange(0,1.5*quants[-1]), sigmoid_4par(np.arange(0,1.5*quants[-1]),
-                                       fits[0], fits[1], fits[2], fits[3]), 'b-')
-        # plt.errorbar(bin_means.iloc[:,0], bin_means.iloc[:,1], 
-        #              yerr=2*bin_stderrs.iloc[:, 1], 
-        #              xerr=2*bin_stderrs.iloc[:, 0], mfc='g')
-    
     fit_values = { 'min_duration' : fits[0],
                    'max_duration' : fits[1],
                    'Hill_exponent': fits[2],
                    'EC50'         : fits[3]
                  }
+    if plot:
+        fig, ax = plt.subplots(1,1, figsize=(8,6))
+        sns.scatterplot(x=xy_data.iloc[:,0], y=xy_data.iloc[:,1], 
+                        ax=ax, alpha=0.1, 
+                        color="gray", edgecolor="None", size=1, 
+                        )
+
+        sns.scatterplot(x = bin_means.iloc[:,0], y = bin_means.iloc[:,1], 
+                        color='w', edgecolor="blue", marker='s', linewidth=1,
+                        label = "binned mean values")
+        
+        x_range = np.arange(0,1.5*quants[-1])
+        sns.lineplot(x=x_range, y=sigmoid_4par(x_range,
+                                               fit_values['min_duration'],
+                                               fit_values['max_duration'],
+                                               fit_values["Hill_exponent"],
+                                               fit_values["EC50"]),
+                                               ax = ax,
+                                               markers='',
+                                               color='b',
+                                               label="Hill sigmoid fit")
+        ax.set_xlabel("eSAC dosage (a.u.)")
+        ax.set_ylabel("Time in mitosis (x 10 min)")
+        ax.set_xlim(xmax=x_range[-1], xmin=x_range[0])
+        y_quant = np.round(xy_data.iloc[:,1].quantile(0.99))
+        ax.set_ylim([0, y_quant])
     
-    return xy_data, bin_means, bin_stderrs, fit_values
+    return xy_data, bin_means, bin_stderrs, bin_sizes, fit_values
 
 def sigmoid_4par(x, base, top, exponent, ec50):
 
     return base + (top - base)*(x**exponent)/(x**exponent+ec50**exponent)
+
+
+def filter_summary_df(summary_df: pd.DataFrame, end_frame: int) -> pd.DataFrame:
+    '''
+    Function removes summary entries wherein mitosis starts at 0 or
+    ends in the last frame of the movie.
+    '''
+    filtered_df = summary_df[summary_df["mito_start"]>0].copy()
+    filtered_df = filtered_df[filtered_df["mitosis"]+filtered_df["mito_start"] < end_frame]
+
+    return filtered_df

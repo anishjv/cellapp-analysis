@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import trackpy as tp
 import scipy.ndimage as ndi
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, medfilt
 from analysis_pars import analysis_pars
 from cellaap_utils import *
 from skimage.util import img_as_uint
@@ -49,35 +49,39 @@ class analysis:
         ## Check for and set path names for correction maps
         # These maps are loaded with the root directory because they apply to all 
         # segmentations in the root directory.
-        self.intensity_map_present = False
+        self.intensity_map_present  = False
         self.background_map_present = False
         
         if not plotting_only:
-            paths = [os.path.join(dirpath,f) for (dirpath, _, filenames) in os.walk(self.root_folder) for f in filenames]
-            maps_types_chnls = [
-                (
-                    name, re.search(r"background|intensity", name).group(), re.search(r"GFP|Texas Red|Cy5|phs", name).group()
-                    ) for name in paths if re.search(r"background|intensity", name)
-                ]
-            for name, type, channel_name in maps_types_chnls:
-                if channel_name  == "Texas Red":
-                    channel_name = "Texas_Red"
-
-                match type:
-                    case "intensity":
-                        self.paths["intensity_map"] = Path(name)
-                        self.stacks[channel_name + "_intensity_map"] = tifffile.imread(Path(name))
-                        self.intensity_map_present = True
-                        print(f"{name} used as the {channel_name} intensity map")
-
-                    case "background":
-                        self.paths["background_map"] = Path(name)
-                        self.stacks[channel_name+"_background_map"] = imread(Path(name))
-                        self.background_map_present = True
-                        print(f"{name} used as the {channel_name} background map")
+            self._load_maps()
         else:
             print(f"Opening {root_folder} in plotting only mode.")
 
+    def _load_maps(self, ):
+        '''
+        Function to detect and load background and intensity correction maps from the root folder
+        '''
+        paths = [os.path.join(dirpath,f) for (dirpath, _, filenames) in os.walk(self.root_folder) for f in filenames]
+        maps_types_chnls = [
+            (
+                name, re.search(r"background|intensity", name).group(), re.search(r"GFP|Texas Red|Cy5|phs", name).group()
+                ) for name in paths if re.search(r"background|intensity", name)
+            ]
+        for name, type, channel_name in maps_types_chnls:
+            # if channel_name  == "Texas Red":
+            #     channel_name = "Texas_Red"
+            match type:
+                case "intensity":
+                    self.paths[channel_name + "_intensity_map"]  = Path(name)
+                    self.stacks[channel_name + "_intensity_map"] = tifffile.imread(Path(name))
+                    self.intensity_map_present = True
+                    print(f"{name} used as the {channel_name} intensity map")
+
+                case "background":
+                    self.paths[channel_name + "_background_map"]  = Path(name)
+                    self.stacks[channel_name + "_background_map"] = imread(Path(name))
+                    self.background_map_present = True
+                    print(f"{name} used as the {channel_name} background map")
 
     def files(self, cellaap_dir: Path, cell_type: str):
         '''
@@ -102,19 +106,19 @@ class analysis:
         image_paths = list(self.data_dir.glob('*.tif')) + list(self.data_dir.glob('*.tiff'))
         image_paths = map(str, image_paths)
         valid_paths = [
-            name for name in image_paths if re.search(r"(.tif|.tiff)", name) and str(self.name_stub) in name
+            name for name in image_paths if re.search(r"(.tif|.tiff)", name) and self.name_stub+"_" in name
         ]
         for name in valid_paths:
             channel = re.search(r"GFP|Texas Red|Cy5|phs", name)
             if channel:
-                print(f"{str(name)} can be used for analysis and display")
+                print(f"{str(name)} can be used for analysis or display")
                 match channel.group():
                     case "phs":
                         self.paths["phase"] = Path(name)
                     case "GFP":
                         self.paths["GFP"] = Path(name)
                     case "Texas Red":
-                        self.paths["Texas_Red"] = Path(name)
+                        self.paths["Texas Red"] = Path(name)
                     case 'Cy5':
                         self.paths["Cy5"] = Path(name)
                 
@@ -152,7 +156,7 @@ class analysis:
             if type(value) is PurePosixPath or PureWindowsPath or Path:
                 if "intensity" in key:
                     intensity_map_name = value.parent / Path(value.stem + "_intensity_map.tif")
-                    channel_map = value.stem.split('_')[-1] + "_intensity_map.tif"
+                    channel_map = value.stem.split('_')[-1] + "_intensity_map"
                     self.stacks[channel_map] = gen_intensity_correction_map(imread(str(value)))
                     tifffile.imsave(intensity_map_name, self.stacks[channel_map].astype(np.float16))
                     self.paths[channel_map] = intensity_map_name
@@ -160,7 +164,7 @@ class analysis:
 
                 elif "background" in key:
                     background_map_name = value.parent / Path(value.stem + "_background_map.tif")
-                    channel_map = value.stem.split('_')[-1] + "_background_map.tif"
+                    channel_map = value.stem.split('_')[-1] + "_background_map"
                     self.stacks[channel_map] = gen_background_correction_map(imread(str(value)))
                     tifffile.imsave(background_map_name, self.stacks[channel_map].astype(np.int16))
                     self.paths[channel_map] = background_map_name
@@ -168,12 +172,11 @@ class analysis:
             
             else:
                 print(f"Dictionary values must be Path objects; try again.")
-
+        self._load_maps()
         return
 
 
-
-    def track_centroids(self, save_flag: False, memory = None, max_pixel_movement = None) -> pd.DataFrame:
+    def track_centroids(self, mode: str, save_flag: False, memory = None, max_pixel_movement = None) -> pd.DataFrame:
         '''
         Function uses the instance segmentation file generated by cell_aap and trackpy
         to track cell centroids.
@@ -213,13 +216,29 @@ class analysis:
         if max_pixel_movement is None:
             max_pixel_movement = self.defaults.max_pixel_movement
 
-        # Adaptive linking for cells that move a lot between two timesteps
-        if self.defaults.adaptive_tracking:
-            self.tracked = tp.link(track_table, 
-                               max_pixel_movement, adaptive_stop=10, adaptive_step=0.9,
-                               memory=memory)
-        else:
-            self.tracked = tp.link(track_table, max_pixel_movement, memory=memory)
+        match mode:
+
+            case "predictive":
+                # tp.linking.Linker.MAX_SUB_NET_SIZE = 40
+                track_pred = tp.predict.NearestVelocityPredict(span=3)
+                self.tracked = track_pred.link_df(track_table,
+                                                  max_pixel_movement,
+                                                  adaptive_stop=10, 
+                                                  adaptive_step=0.9, 
+                                                  memory=memory)
+
+            case "adaptive":
+                self.tracked = tp.link(track_table, 
+                                       max_pixel_movement, 
+                                       adaptive_stop=10, 
+                                       adaptive_step=0.9,
+                                       memory=memory)
+            
+            case "vanilla":
+                self.tracked = tp.link(track_table, 
+                                       max_pixel_movement, 
+                                       memory=memory)
+        
         
         self.tracked = tp.filter_stubs(self.tracked, self.defaults.min_track_length) 
         
@@ -241,9 +260,20 @@ class analysis:
                                                       self.tracked.loc[i,"y"]])
         self.tracked["semantic"] = semantic_label
 
+        # remove 0's and 2's, and fill gaps in the semantic vector.
+        self.tracked.loc[self.tracked.semantic < 100, "semantic"] = 1
+
+        self.tracked.loc[:, "semantic"] = medfilt(self.tracked.semantic,
+                                                  self.defaults.semantic_gap_closing)
+
+        # Turn into Boolean
+        semantic_smoothed = (self.tracked.semantic - 1)//99
+        semantic_smoothed = closing(semantic_smoothed, 
+                                    self.defaults.semantic_footprint)
+        self.tracked["semantic_smoothed"] = semantic_smoothed
+        
         # classify the cells as dividing or non-dividing
         # observed division = 1; no division = 0
-
         for id in list(set(self.tracked.particle)):
             index  = self.tracked[self.tracked.particle==id].index
 
@@ -259,17 +289,40 @@ class analysis:
     
     def _display_tracks(self, img_stack = None):
         '''
+        Opens a napari viewer displaying the phase stack overlayed with
+        semantic segmentation and tracking data.
+        If a string corresponding to an existing phase path is provided, 
+        then the function infers the names of the inference folder, inference
+        stack and the _analysis.xlsx file to create the overlays.
+        Function assumes that all files exist and are appropriately named.
         '''
         if "viewer" not in self.__dict__.keys():
             self.viewer = napari.Viewer()
         
-        if img_stack is None:
-            self.stacks["phase"] = imread(self.paths["phase"])
-            phase_binned = np.zeros_like(self.stacks["instance"], dtype=int)
-            for i in np.arange(phase_binned.shape[0]):
-                phase_binned[i,:,:]=block_reduce(self.stacks["phase"][i,:,:,],block_size=(2,2), func=np.max)
-        else:
-            pass
+        if img_stack is not None:
+            # Create Path object for the file
+            self.paths["phase"] = self.root_folder / Path(img_stack)
+            # Create Path for the inference folder
+            inf_folders = self.root_folder.glob("*_inference")
+            self.name_stub = re.search(r"[A-H]([1-9]|[0][1-9]|[1][0-2])_s(\d{2}|\d{1})", 
+                                       str(self.paths["phase"].name)).group()
+            for folder in self.root_folder.glob("*_inference"):
+                if self.name_stub+"_" in folder.name:
+                    self.cellaap_dir = folder
+                    semantic_file = [name for name in folder.glob("*semantic.tif")][0]
+                    excel_file = [name for name in folder.glob("*analysis.xlsx")][0]
+                    print(f"found {semantic_file} and {excel_file}")
+                    self.paths["semantic"] = semantic_file
+                    self.stacks["semantic"] = imread(semantic_file)
+                    self.tracked = pd.read_excel(excel_file)
+
+        self.stacks["phase"] = imread(self.paths["phase"])
+        shape = self.stacks["phase"].shape
+        binned_shape = (shape[0], shape[1]//2, shape[2]//2)
+        phase_binned = np.zeros(binned_shape, dtype=int)
+        for i in np.arange(phase_binned.shape[0]):
+            phase_binned[i,:,:]=block_reduce(self.stacks["phase"][i,:,:,],
+                                             block_size=(2,2), func=np.max)
 
         self.viewer.add_image(phase_binned)
         self.viewer.add_labels(self.stacks["semantic"])
@@ -288,14 +341,11 @@ class analysis:
         save_flag - Whether to export dataframe as xlsx
         id        - ID of the cell (assigned by trackpy); -1 will analyze all cells
         '''
-        try:
-            if channel in []:
-                pass
-        except:
-            raise ValueError(f"")
-        
-        if channel == "Texas Red":
-            channel = "Texas_Red"
+        # try:
+        #     if channel in []:
+        #         pass
+        # except:
+        #     raise ValueError(f"")
         
         # Read image stack
         channel_stack = imread(self.paths[channel])
@@ -315,7 +365,8 @@ class analysis:
             elif type(id) == list:
                 id_list = id
         else:
-            id_list = list(set(self.tracked[self.tracked.mitotic==1].particle))
+            id_list = sorted(list(set(self.tracked[self.tracked.mitotic==1].particle)))
+            print(f"{len(id_list)} tracks to process")
         
         # Default values for all entries
         self.tracked[channel] = np.nan
@@ -324,20 +375,10 @@ class analysis:
         
         
         for id in id_list:
-            print(f"Processing cell #{id}...")
-            semantic = self.tracked[self.tracked.particle==id].semantic.to_list()
+            
             # Measurement decision
-            measure_cell = False
-            if len(semantic) == self.max_timepoints:
-                if semantic[0] == 1 & semantic[-1] == 1:
-                    measure_cell = True
-                else:
-                    print(f"cell #{id} not measured; mitotic at start or end")
-            else:
-                if semantic[0] == 1:
-                    measure_cell = True
-                else:
-                    print(f"cell #{id} not measured; mitotic at start")
+            measure_cell = True
+            print(f"Processing cell #{id}...")
             
             if measure_cell:
                 frames = self.tracked[self.tracked.particle==id].frame.tolist()
@@ -394,24 +435,28 @@ class analysis:
         '''
         # Select only those tracks where mitosis was observed
         idlist    = list(set(self.tracked[self.tracked.mitotic==1].particle))
+        
         # A list to store the number of peaks
         # Multiple peaks will reveal either tracking errors or segmentation issues
         peaks_per_track = np.zeros(len(idlist)) 
         # Fluctuations in the mask size will indicate segmentation quality
         cell_area_std  = np.zeros_like(peaks_per_track)
-        mitosis   =    []
-        mito_start=    []
-        cell_area =    []
-        particle  =    []
-        track_length = []
-        channels =     []
+
+        mitosis          = []
+        mito_start       = []
+        cell_area        = []
+        particle         = []
+        track_length     = []
+        channels         = []
+        max_displacement = []
+
         # Check which channels have been measured. If none, return only "mitotic duration"
         # Need to find a better way to code this.
 
         if "GFP" in self.tracked.columns:
             channels.append('GFP')
-        if "Texas_Red" in self.tracked.columns:
-            channels.append("Texas_Red")
+        if "Texas Red" in self.tracked.columns:
+            channels.append("Texas Red")
         if "Cy5" in self.tracked.columns:
             channels.append("Cy5")
         signal_storage = {}
@@ -425,21 +470,14 @@ class analysis:
 
         for index, id in enumerate(idlist):
             
-            semantic = self.tracked[self.tracked.particle==id].semantic.to_numpy()
-            # remove 0's, fill gaps in the semantic vector.
-            semantic[semantic==0] = 1
+            semantic = self.tracked[self.tracked.particle==id].semantic_smoothed.to_numpy()
 
-            # Peak number before gap filling
-            _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
+            # To include cells that were in mitosis at the end of the movie
+            _, props = find_peaks(np.append(semantic,np.zeros(3)), 
+                                  width=self.defaults.min_mitotic_duration_in_frames)
             peaks_per_track[index] = props["widths"].size
             cell_area_std[index]   = self.tracked[self.tracked.particle==id].area.std()
 
-            # Turn into Boolean
-            semantic = (semantic - 1)//99
-            semantic = closing(semantic, self.defaults.semantic_footprint)
-            # Find peaks
-            _, props = find_peaks(semantic, width=self.defaults.min_mitotic_duration_in_frames)
-            
             # Only select tracks that have one peak in the semantic trace
             # This will bias the analysis to smaller mitotic durations
             if props["widths"].size == 1:
@@ -448,8 +486,9 @@ class analysis:
                 cell_area.append(self.tracked[self.tracked.particle==id].area.mean())
                 particle.append(id)
                 track_length.append(semantic.shape[0])
+                max_displacement.append(calculate_displacement(self.tracked.loc[self.tracked.particle==id,
+                                                                                ("x", "y")]).max())
                 
-        
                 for channel in channels:
                     signal, bkg_corr, int_corr, signal_std, bkg_std, int_std = calculate_signal(
                                                                 semantic, 
@@ -465,19 +504,22 @@ class analysis:
                     signal_storage[f'{channel}_int_corr'].append(int_corr)
                     signal_storage[f'{channel}_int_corr_std'].append(int_std)
                 
-        
+        # Quality metrics
         n_obs, bins = np.histogram(peaks_per_track, np.arange(0,15))
-        self.quality["peaks_per_track"] = pd.DataFrame({"n_peaks"     : bins[:-1],
-                                                            "cell number" : n_obs})
+        peaks_per_track_df = pd.DataFrame({"n_peaks"     : bins[:-1],
+                                           "track number" : n_obs})
+        
+        self.quality["peaks_per_track"] = peaks_per_track_df
         self.quality["cell_area_std"]   = pd.DataFrame(cell_area_std, columns = ["Area std."])
 
         # Construct summary DF
         other_storage = {
-                        "particle"     : particle,
-                        "track_length" : track_length,
-                        "mito_start"   : mito_start,
-                        "cell_area"    : cell_area,
-                        "mitosis"      : mitosis,
+                        "particle"         : particle,
+                        "track_length"     : track_length,
+                        "max_displacement" : max_displacement,
+                        "mito_start"       : mito_start,
+                        "cell_area"        : cell_area,
+                        "mitosis"          : mitosis,
                         }
         
         summary_storage = other_storage | signal_storage
