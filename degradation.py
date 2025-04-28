@@ -61,26 +61,24 @@ def retrieve_traces(
     traces = []
     ids = []
     for id in analysis_df["particle"].unique():
-        trace = analysis_df.query(f"particle=={id}")[[f"{wl}", "semantic"]]
-        corr = analysis_df.query(f"particle=={id}")[
-            [f"{wl}_int_corr", f"{wl}_bkg_corr"]
-        ]
+        trace = analysis_df.query(f"particle=={id}")[[f"{wl}", "semantic_smoothed"]]
+        bkg = analysis_df.query(f"particle=={id}")[f"{wl}_bkg_corr"]
+        intensity = analysis_df.query(f"particle=={id}")[f"{wl}_int_corr"]
+
         trace = trace.to_numpy()
-        trace[:, 1] = (trace[:, 1] - 1) // 99
+
         if clean:
             t_char = 30 // frame_interval
-            trace[:, 1] = closing(trace[:, 1], np.ones(t_char))
-            peaks, props = find_peaks(trace[:, 1], plateau_size=1)
+            padded_semantic = np.append(trace[:, 1], np.zeros(3))
+            _, props = find_peaks(padded_semantic, plateau_size=1)
             peak_widths = [
                 width
                 for i, width in enumerate(props["plateau_sizes"])
                 if width >= t_char
             ]
-            if len(peak_widths) == 1:
-                if (np.sum(props["plateau_sizes"]) - peak_widths[0]) < t_char:
-                    trace[:, 0] = (trace[:, 0] - corr[f"{wl}_bkg_corr"]) * corr[
-                        f"{wl}_int_corr"
-                    ]
+            if len(peak_widths) == 1 and (np.sum(props["plateau_sizes"]) - peak_widths[0]) < t_char:
+                if padded_semantic[0] != 1:
+                    trace[:, 0] = (trace[:, 0] - bkg) * intensity
                     traces.append(trace)
                     ids.append(id)
         else:
@@ -142,41 +140,6 @@ def degradation_interval(
         return None, None
 
 
-def quant_deg(analysis_file_path: str, wl: str, spacing: int):
-
-    analysis_df = pd.read_excel(Path(analysis_file_path))
-
-    deg_data = []
-    traces = retrieve_traces(analysis_df, wl, clean_spurious=True)
-    for trace in traces:
-
-        trace = KernelReg(
-            trace,
-            np.linspace(0, trace.shape[0] - 1, trace.shape[0]),
-            "c",
-            reg_type="ll",
-            bw=[2],
-        ).fit()[
-            0
-        ]  # necessary smoothing
-
-        start, end = degradation_interval(trace, prominence=2, spacing=spacing)
-        if start or end == None:
-            continue  # starts next loop iteration
-        d_dx = findiff.FinDiff(0, spacing, 1, acc=6)
-        deg_rate = d_dx(trace[start:end])
-        mean_deg_rate = deg_rate.mean()
-
-        trace_data = {
-            "degradation signal": trace[start:end],
-            "degradation rate": deg_rate,
-            "mean degradation rate": mean_deg_rate,
-        }
-        deg_data.append(trace_data)
-
-    results_df = pd.DataFrame(deg_data)
-    results_df.to_excel(analysis_file_path, sheet_name=f"{wl}_degradation")
-
 
 def qual_deg(traces: npt.NDArray, frame_interval: int) -> tuple[npt.NDArray]:
     """
@@ -195,7 +158,8 @@ def qual_deg(traces: npt.NDArray, frame_interval: int) -> tuple[npt.NDArray]:
     first_tp = []
     t_char = 30 // frame_interval
     for trace in traces:
-        peaks, props = find_peaks(trace[:, 1], plateau_size=t_char)
+        padded_semantic = np.append(trace[:, 1], np.zeros(3))
+        peaks, props = find_peaks(padded_semantic, plateau_size=t_char)
         if props["plateau_sizes"][0] % 2:
             first_mitosis = peaks[0] - (props["plateau_sizes"][0] // 2)
         else:
@@ -269,7 +233,7 @@ def unaligned_chromatin(
         nobkg_cell = gaussian(nobkg_cell, sigma=1.5)
         zoom_mask = zoom_mask[rmin:rmax, cmin:cmax]
 
-        if classifier == 100:
+        if classifier == 1:
 
             # find first aggresive threshold
             thresh = threshold_otsu(nobkg_cell)
@@ -506,7 +470,7 @@ def extract_montages(
         zoom_mask = zoom_mask[rmin:rmax, cmin:cmax]
 
         if mode != "cell":
-            if classifier == 100:
+            if classifier == 1:
                 # find first aggresive threshold
                 thresh = threshold_otsu(nobkg_cell)
 
