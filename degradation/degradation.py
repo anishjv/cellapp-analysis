@@ -1,7 +1,5 @@
 import os
 from pathlib import Path
-from itertools import groupby
-from operator import itemgetter
 
 import numpy as np
 import numpy.typing as npt
@@ -9,13 +7,9 @@ import pandas as pd
 import tifffile as tiff
 import matplotlib.pyplot as plt
 import scipy.ndimage as ndi
-from scipy.optimize import fmin
 from scipy.signal import find_peaks
-from scipy.ndimage import zoom
 
 from typing import Tuple, List, Optional
-
-from statsmodels.nonparametric.kernel_regression import KernelReg
 
 import skimage
 from skimage.morphology import (
@@ -23,25 +17,16 @@ from skimage.morphology import (
     white_tophat,
     binary_dilation,
     binary_erosion,
-    closing,
-    disk,
+
 )
 from skimage.filters import threshold_otsu, gaussian
 from skimage.measure import label, regionprops
 from skimage.segmentation import clear_border, watershed
 from skimage.feature import peak_local_max
-from skimage.restoration import unsupervised_wiener
-import findiff
-
-
-def gkern(l=5, sig=1.0):
-    """
-    creates gaussian kernel with side length `l` and a sigma of `sig`
-    """
-    ax = np.linspace(-(l - 1) / 2.0, (l - 1) / 2.0, l)
-    gauss = np.exp(-0.5 * np.square(ax) / np.square(sig))
-    kernel = np.outer(gauss, gauss)
-    return kernel / np.sum(kernel)
+import glob
+import re
+from sklearn.linear_model import LinearRegression
+from segment_chromatin import unaligned_chromatin, bbox, ilastik_unaligned_chromatin #type:ignore
 
 
 def retrieve_traces(
@@ -91,58 +76,6 @@ def retrieve_traces(
     return traces, ids
 
 
-def curvature(trace: npt.NDArray, spacing: Optional[int] = 1) -> npt.NDArray:
-    """
-    Computes the curvature of a discrete valued function
-    -----------------------------------------------------
-    INPUTS:
-        trace: npt.NDArray
-        spacing: int
-    """
-
-    d2_dx2 = findiff.FinDiff(0, spacing, 2, acc=6)
-    d3_dx3 = findiff.FinDiff(0, spacing, 3, acc=6)
-
-    return d2_dx2(trace) / (1 + d3_dx3(trace)) ** (3 / 2)
-
-
-def degradation_interval(
-    trace: npt.NDArray,
-    prominence: float,
-    spacing: Optional[int] = 1,
-) -> tuple[int]:
-    """
-    Computes the interval over which a signal is diminishing. The function expects certain things to be true:
-    1. There is a singular global maxima
-    2. There is a qualitative "stop" to degradation (degradation finishes at some point during the trace)
-    ---------------------------------------------------------------------------------------------------------
-
-    INPUTS:
-        trace: npt.ndarray,
-        prominence: float,
-        spacing: int
-    OUTPUTS:
-        start: int, index of the global maxima
-        end: int, index of the most prominent maxima of curvature that occurs after the global maxima
-    """
-
-    start = fmin(-trace, trace.shape[0] // 2)
-    k = curvature(trace, spacing)
-    curvature_maxima, _ = find_peaks(k[start:], prominence=prominence)
-    iter = 1
-    while (
-        len(curvature_maxima) != 1 and iter <= 50
-    ):  # continue trying to find peaks until 1 is found
-        iter += 1
-        curvature_maxima, _ = find_peaks(k[start:], prominence=prominence / iter)
-
-    if len(curvature_maxima) == 1:
-        end = curvature_maxima[0]
-        return start, end
-    else:
-        return None, None
-
-
 
 def qual_deg(traces: npt.NDArray, frame_interval: int) -> tuple[npt.NDArray]:
     """
@@ -175,285 +108,6 @@ def qual_deg(traces: npt.NDArray, frame_interval: int) -> tuple[npt.NDArray]:
 
     return intensity_traces, semantic_traces, first_tp
 
-
-def adjust_zoom_factor(chromatin_shape: tuple[int, int, int], instance_shape: tuple[int, int, int]) -> float:
-    """
-    Adjust zoom factor based on input shapes.
-    ---------------------------------------------------------------------------------------------------------------
-    INPUTS:
-        chromatin_shape: tuple
-        instance_shape: tuple
-    OUTPUTS:
-        zoom_factor: float
-    """
-    try:
-        assert chromatin_shape[1] / instance_shape[1] == chromatin_shape[2] / instance_shape[2]
-        return chromatin_shape[2] / instance_shape[2]
-    except AssertionError:
-        raise ValueError("Chromatin and Instance must be square arrays")
-
-
-def prepare_cell_image(chromatin: np.ndarray, frame: int, bbox_coords: tuple[int, int, int, int]) -> np.ndarray:
-    """
-    Prepares the cell image by cropping and applying top-hat filtering and gaussian smoothing.
-    ---------------------------------------------------------------------------------------------------------------
-    INPUTS:
-        chromatin: np.ndarray
-        frame: int
-        bbox_coords: tuple (rmin, rmax, cmin, cmax)
-    OUTPUTS:
-        cell: np.ndarray
-        nobkg_cell: np.ndarray
-    """
-    rmin, rmax, cmin, cmax = bbox_coords
-    cell = chromatin[frame, rmin:rmax, cmin:cmax]
-    nobkg_cell = skimage.morphology.white_tophat(cell, disk(5))
-    return cell, gaussian(nobkg_cell, sigma=1.5)
-
-
-def get_largest_signal_regions(nobkg_cell, cell: np.ndarray, num_regions: int = 1) -> tuple[list[regionprops], np.ndarray]:
-    """
-    Segments the cell and returns the brightest regions.
-    ---------------------------------------------------------------------------------------------------------------
-    INPUTS:
-        cell: np.ndarray
-        num_regions: int
-    OUTPUTS:
-        sorted_regions: List[regionprops]
-        labeled: np.ndarray
-    """
-    thresh = threshold_otsu(nobkg_cell) #
-    labeled, num_labels = label(nobkg_cell > thresh, return_num=True, connectivity=1)
-    labels = np.linspace(1, num_labels, num_labels).astype(int)
-    region_intensities = [np.nansum(cell[labeled == (lbl)]) for lbl in labels]
-    max_intensity = max(region_intensities)
-    max_intensity_lbl = labels[region_intensities.index(max_intensity)]
-    
-    if len(region_intensities) > 1:
-        second_max_intensity = sorted(region_intensities)[-2]
-        nxt_max_intensity_lbl = labels[
-                    region_intensities.index(second_max_intensity)
-                ]
-        
-        intensity_diff_ratio = (max_intensity - second_max_intensity) / max_intensity
-        
-    else:
-        nxt_max_intensity_lbl = None
-        intensity_diff_ratio = 1        
-        
-    return labeled, max_intensity_lbl, nxt_max_intensity_lbl, intensity_diff_ratio
-
-
-def remove_regions(labels: list[int], labeled: np.ndarray) -> np.ndarray:
-    """
-    Removes specified labeled regions by dilating their masks.
-    ---------------------------------------------------------------------------------------------------------------
-    INPUTS:
-        regions: List[regionprops]
-        labeled: np.ndarray
-    OUTPUTS:
-        removal_mask: np.ndarray
-    """
-    removal_mask = np.zeros_like(labeled, dtype=bool)
-    for lbl in labels:
-        removal_mask[labeled == lbl] = 1
-    return binary_dilation(removal_mask, disk(9))
-
-
-def remove_metaphase_if_eccentric(lbl:int, labeled: np.ndarray) -> np.ndarray:
-    """
-    Removes the metaphase plate only if its eccentricity exceeds threshold.
-    ---------------------------------------------------------------------------------------------------------------
-    INPUTS:
-        region: regionprops
-        labeled: np.ndarray
-    OUTPUTS:
-        removal_mask: np.ndarray
-    """
-    region_mask = np.zeros_like(labeled, dtype=bool)
-    region_mask[labeled == lbl] = 1
-    eccentricity = regionprops(label(region_mask.astype(int)))[0].eccentricity
-    if eccentricity > 0.7:
-        print('metaphase; removing plate')
-        return binary_dilation(region_mask, disk(9))
-    else:
-        print('metaphase; NOT removing plate')
-        return np.zeros_like(labeled, dtype=bool)
-
-
-def segment_unaligned_chromosomes(cell: np.ndarray, removal_mask: np.ndarray, min_area: int) -> tuple[int, int, int]:
-    """
-    Segments and measures properties of unaligned chromosomes.
-    ---------------------------------------------------------------------------------------------------------------
-    INPUTS:
-        cell: np.ndarray
-        removal_mask: np.ndarray
-        min_area: int
-    OUTPUTS:
-        total_area: int
-        total_intensity: int
-        object_count: int
-    """
-    perfect_psf = np.zeros((19, 19))
-    perfect_psf[9, 9] = 1
-    psf = gaussian(perfect_psf, 2)
-    deconv_cell = unsupervised_wiener(cell, psf, clip=False)[0]
-    cell_minus_struct = np.copy(deconv_cell)
-    cell_minus_struct[removal_mask] = 0
-    
-    print(np.nansum(cell))
-    print(np.std(psf))
-    print(np.nansum(deconv_cell))
-    print(np.nansum(removal_mask))
-    
-
-    thresh = threshold_otsu(cell_minus_struct)
-    labeled, num_labels = label(cell_minus_struct > thresh, return_num=True, connectivity=1)
-    labels = np.linspace(1, num_labels, num_labels).astype(int)
-    labeled = clear_border(labeled)
-    
-    areas, intensities = [], []
-    for lbl in labels:
-        area = np.nansum(labeled[labeled == lbl])
-        if area >= min_area:
-            intensity = np.nansum(cell[labeled==lbl])
-            areas.append(area)
-            intensities.append(intensity)
-                
-
-    return np.nansum(areas), np.nansum(intensities), len(areas)
-
-
-def measure_whole_cell(cell: np.ndarray) -> Tuple[int, float, float]:
-    """
-    Measures whole cell area, total intensity, and average intensity.
-    ---------------------------------------------------------------------------------------------------------------
-    INPUTS:
-        cell: np.ndarray
-    OUTPUTS:
-        area: int
-        intensity: float
-        avg_intensity: float
-    """
-    thresh = threshold_otsu(cell)
-    labeled = clear_border(label(cell > thresh))
-    mask = labeled > 0
-    return np.nansum(mask),np.nansum(cell[mask]), np.nanmean(cell[mask])
-
-
-def unaligned_chromatin(
-    identity: int,
-    analysis_df: pd.DataFrame,
-    instance: np.ndarray,
-    chromatin: np.ndarray,
-    min_chromatin_area: Optional[int] = 4
-) -> tuple[list[int], list[int], list[float], list[int], list[float], list[int], int]:
-    """
-    Given an image capturing histone fluoresence, returns the area emitting of signal emitting regions minus the
-    area of the largest signal emitting region (corresponds with unaligned chromosomes in metaphase)
-    ---------------------------------------------------------------------------------------------------------------
-    INPUTS:
-        identity: int
-        analysis_df: pd.DataFrame
-        instance: np.ndarray
-        chromatin: np.ndarray
-        min_chromatin_area: Optional[int]
-    OUTPUTS:
-        area_signal: List[int]
-        intensity_signal: List[int]
-        whole_cell_intensity: List[float]
-        num_signals: List[int]
-        whole_cell_avg_intensity: List[float]
-        whole_cell_area: List[int]
-        first_anaphase: int
-    """
-    zoom_factor = adjust_zoom_factor(chromatin.shape, instance.shape)
-    frames_data = analysis_df.query(f"particle == {identity}")
-    semantics = frames_data["semantic_smoothed"].tolist()
-
-    results = []
-    anaphase_indices = []
-    print(f'Working on cell {identity}')
-    
-    for idx, row in frames_data.iterrows():
-        f, l, semantic = int(row["frame"]), int(row["label"]), int(row["semantic_smoothed"])
-
-        mask = instance[f] == l
-        if zoom_factor != 1:
-            mask = zoom(mask, zoom_factor, order=0)
-        mask = binary_dilation(mask, disk(3))
-
-        bbox_coords = bbox(mask)
-        cell, nobkg_cell = prepare_cell_image(chromatin, f, bbox_coords)
-
-        if semantic == 1:
-            labeled_regions, max_lbl, second_lbl, intensity_diff_ratio = get_largest_signal_regions(nobkg_cell, cell, num_regions=2)
-
-            if second_lbl:
-                to_check = idx+9 if (idx+9) < len(semantics) else -1
-                near_end_of_mitosis = any(s == 0 for s in semantics[idx:to_check]) 
-                
-                if intensity_diff_ratio < (1 / 3) and near_end_of_mitosis:
-                    print('anaphase; removing blobs')
-                    removal_mask = remove_regions([max_lbl, second_lbl], labeled_regions)
-                    anaphase_indices.append(idx)
-                else:
-                    removal_mask = remove_metaphase_if_eccentric(max_lbl, labeled_regions)
-            else:
-                removal_mask = remove_metaphase_if_eccentric(max_lbl, labeled_regions)
-
-            if len(anaphase_indices) > 0:
-                consecutives = np.split(
-                    anaphase_indices, np.where(np.diff(anaphase_indices) != 1)[0] + 1
-                )
-                for sublist in consecutives:
-                    if len(sublist) > 1:
-                        first_anaphase = sublist[0]
-                        break
-                    else:
-                        first_anaphase = anaphase_indices[0]
-            else:
-                # anaphase may not be detected due to finite temporal resolution
-                first_anaphase = None
-
-            area_sig, int_sig, num_sig = segment_unaligned_chromosomes(cell, removal_mask, min_chromatin_area)
-        else:
-            area_sig, int_sig, num_sig = 0, 0, 0
-
-        whole_area, whole_intensity, whole_avg_intensity = measure_whole_cell(cell)
-
-        results.append((area_sig, int_sig, whole_intensity, num_sig, whole_avg_intensity, whole_area))
-        
-    area_signal, intensity_signal, whole_cell_intensity, num_signals, whole_cell_avg_intensity, whole_cell_area = zip(*results)
-
-    return (
-        list(area_signal),
-        list(intensity_signal),
-        list(whole_cell_intensity),
-        list(num_signals),
-        list(whole_cell_avg_intensity),
-        list(whole_cell_area),
-        first_anaphase,
-    )
-
-def bbox(img: npt.NDArray) -> tuple[int]:
-    """
-    Returns the minimum bounding box of a boolean array containing one region of True values
-    ------------------------------------------------------------------------------------------
-    INPUTS:
-        img: npt.NDArray
-    OUTPUTS:
-        rmin: float, lower row index
-        rmax: float, upper row index
-        cmin: float, lower column index
-        cmax: float, upper column index
-    """
-    rows = np.any(img, axis=1)
-    cols = np.any(img, axis=0)
-    rmin, rmax = np.where(rows)[0][[0, -1]]
-    cmin, cmax = np.where(cols)[0][[0, -1]]
-
-    return rmin, rmax, cmin, cmax
 
 
 def watershed_split(
@@ -680,34 +334,146 @@ def display_save(
         fig.savefig(path, dpi=300)
 
 
-def cycb_chromatin_batch_analyze(
-    positions: list[str],
-    analysis_path_templ: str,
-    instance_path_templ: str,
-    chromatin_path_templ: str,
+def fit_three_lines(x, y):
+    best_score = float('inf')
+    best_breaks = None
+    best_models = None
+
+    # Ensure inputs are numpy arrays
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    # Try all valid pairs of breakpoints: i < j
+    for i in range(2, len(x) - 4):
+        for j in range(i + 2, len(x) - 2):
+            x1, y1 = x[:i], y[:i]
+            x2, y2 = x[i:j], y[i:j]
+            x3, y3 = x[j:], y[j:]
+
+            x1r, x2r, x3r = x1.reshape(-1, 1), x2.reshape(-1, 1), x3.reshape(-1, 1)
+
+            model1 = LinearRegression().fit(x1r, y1)
+            model2 = LinearRegression().fit(x2r, y2)
+            model3 = LinearRegression().fit(x3r, y3)
+
+            y1_pred = model1.predict(x1r)
+            y2_pred = model2.predict(x2r)
+            y3_pred = model3.predict(x3r)
+
+            ssr = np.sum((y1 - y1_pred) ** 2) + np.sum((y2 - y2_pred) ** 2) + np.sum((y3 - y3_pred) ** 2)
+
+            if ssr < best_score:
+                best_score = ssr
+                best_breaks = (i, j)
+                best_models = (model1, model2, model3)
+
+    return best_breaks, best_models
+    
+
+def fit_two_lines(x, y):
+    
+    best_break = None
+    best_score = float('inf')
+    best_models = (None, None)
+
+    for i in range(2, len(x) - 2):
+        x1, y1 = x[:i].reshape(-1, 1), y[:i]
+        x2, y2 = x[i:].reshape(-1, 1), y[i:]
+
+        model1 = LinearRegression().fit(x1, y1)
+        model2 = LinearRegression().fit(x2, y2)
+
+        y1_pred = model1.predict(x1)
+        y2_pred = model2.predict(x2)
+
+        ssr = np.sum((y1 - y1_pred) ** 2) + np.sum((y2 - y2_pred) ** 2)
+
+        if ssr < best_score:
+            best_score = ssr
+            best_break = i
+            best_models = (model1, model2)
+     
+
+    return best_break, best_models
+
+
+def fit_cycb_regimes(x, y):
+    
+    best_breaks, best_models = fit_two_lines(x,y)
+    
+    # If x/y was short (len<2) error will occur
+    try:
+        eps = np.abs(best_models[0].coef_ - best_models[1].coef_)
+    except AttributeError:
+        return np.nan, (np.nan,)
+    
+    #If abs(slope) of first fit > abs(slope) of second fit => check for three regimes
+    if np.abs(best_models[0].coef_) > abs(best_models[1].coef_):
+        best_breaks, best_models = fit_three_lines(x,y)
+        return best_breaks, best_models 
+    
+    #Must check for 3 regimes first, as
+    #the slope of the two misfitted lines may have been arbitrarily similar
+    #If slope of two fits is similar => we say that no slow regime occured (fit one line)
+    if eps > np.abs(max([fit.coef_ for fit in best_models]))/5:
+        pass
+    else:
+        x = x.reshape(-1, 1)
+        best_models = (LinearRegression().fit(x,y) ,)
+        best_breaks = np.nan
+        
+    
+    return best_breaks, best_models
+
+
+def cycb_chromatin_batch_analyze(positions:list, analysis_paths:list, instance_paths:list, chromatin_paths:list, piecewise_fit:bool
 ) -> tuple[pd.DataFrame]:
 
-    for pos in positions:
-        instance_path = instance_path_templ.format(pos, pos)
-        analysis_path = analysis_path_templ.format(pos, pos)
-        chromatin_path = chromatin_path_templ.format(pos)
-
+    for name_stub, analysis_path, instance_path, chromatin_path in zip(positions, analysis_paths, instance_paths, chromatin_paths):
         try:
             instance = tiff.imread(instance_path)
             chromatin = tiff.imread(chromatin_path)
             analysis_df = pd.read_excel(analysis_path)
         except FileNotFoundError:
             print(
-                f"Could not find either the instance movie, chromatin movie, or analysis dataframe for {pos}"
+                f"Could not find either the instance movie, chromatin movie, or analysis dataframe for {analysis_path}"
             )
             continue
 
         analysis_df.replace([np.inf, -np.inf], np.nan, inplace=True)
         analysis_df.dropna(inplace=True)
 
-        print(f"Working on position: {pos}")
+        print(f"Working on position: {name_stub}")
         traces, ids = retrieve_traces(analysis_df, "GFP", 4)
         intensity, semantic, first_tps = qual_deg(traces, 4)
+
+        if piecewise_fit:
+            brk_pts = []
+            fit_info = []
+            for trace in intensity:
+                front_end_chopped = 0
+                mit_trace = trace[classification.iloc[i] ==1]
+                front_end_chopped += (np.nonzero(semantic[i])[0][0] + 1)
+
+                #forcing glob_min_index to be greater than glob_max_index
+                glob_max_index = np.where(mit_trace == max(mit_trace))[0][0]
+                glob_min_index = np.where(mit_trace == min(mit_trace[glob_max_index:]))[0][0]
+                
+                mit_neg_trace = mit_trace[glob_max_index:glob_min_index]
+                front_end_chopped += glob_max_index + 1
+                
+                x = np.linspace(0, mit_neg_trace.shape[0]-1, mit_neg_trace.shape[0])
+                brk_pt, fits = fit_cycb_regimes(x, mit_neg_trace)
+                try:
+                    slope_int = [(fit.coef_, fit.intercept_) for fit in fits]
+                    brk_pts.append(brk_pt+front_end_chopped)
+                except AttributeError:
+                    slope_int = np.nan
+                    brk_pts.append(np.nan)
+                
+                fit_info.append(slope_int)
+        else:
+            pass
 
         un_chromatin = []
         un_intensity = []
@@ -749,7 +515,7 @@ def cycb_chromatin_batch_analyze(
         save_dir = os.path.dirname(analysis_path)
         if not os.path.isdir(save_dir):
             save_dir = os.getcwd()
-        save_path = os.path.join(save_dir, f"cycb_chromatin_{pos}.xlsx")
+        save_path = os.path.join(save_dir, f"{name_stub}_cycb_chromatin.xlsx")
 
         with pd.ExcelWriter(save_path, engine="openpyxl") as writer:
             cycb.to_excel(writer, sheet_name="cycb")
@@ -769,32 +535,142 @@ def cycb_chromatin_batch_analyze(
             other_data.to_excel(writer, sheet_name="analysis_info")
 
 
+
+def cycb_chromatin_batch_analyze_ilastik(positions:list, 
+                                         analysis_paths:list, 
+                                         instance_paths:list, 
+                                         chromatin_paths:list, 
+                                         ilastik_project_path: str,
+                                         piecewise_fit:Optional[bool] = False
+                                        ) -> tuple[pd.DataFrame]:
+
+    for name_stub, analysis_path, instance_path, chromatin_path in zip(positions, analysis_paths, instance_paths, chromatin_paths):
+        try:
+            instance = tiff.imread(instance_path)
+            chromatin = tiff.imread(chromatin_path)
+            analysis_df = pd.read_excel(analysis_path)
+        except FileNotFoundError:
+            print(
+                f"Could not find either the instance movie, chromatin movie, or analysis dataframe for {analysis_path}"
+            )
+            continue
+
+        analysis_df.replace([np.inf, -np.inf], np.nan, inplace=True)
+        analysis_df.dropna(inplace=True)
+
+        print(f"Working on position: {name_stub}")
+        traces, ids = retrieve_traces(analysis_df, "GFP", 4)
+        intensity, semantic, first_tps = qual_deg(traces, 4)
+
+        if piecewise_fit:
+            brk_pts = []
+            fit_info = []
+            for trace in intensity:
+                front_end_chopped = 0
+                mit_trace = trace[classification.iloc[i] ==1]
+                front_end_chopped += (np.nonzero(semantic[i])[0][0] + 1)
+
+                #forcing glob_min_index to be greater than glob_max_index
+                glob_max_index = np.where(mit_trace == max(mit_trace))[0][0]
+                glob_min_index = np.where(mit_trace == min(mit_trace[glob_max_index:]))[0][0]
+                
+                mit_neg_trace = mit_trace[glob_max_index:glob_min_index]
+                front_end_chopped += glob_max_index + 1
+                
+                x = np.linspace(0, mit_neg_trace.shape[0]-1, mit_neg_trace.shape[0])
+                brk_pt, fits = fit_cycb_regimes(x, mit_neg_trace)
+                try:
+                    slope_int = [(fit.coef_, fit.intercept_) for fit in fits]
+                    brk_pts.append(brk_pt+front_end_chopped)
+                except AttributeError:
+                    slope_int = np.nan
+                    brk_pts.append(np.nan)
+                
+                fit_info.append(slope_int)
+        else:
+            pass
+
+        un_chromatin = []
+        un_intensity = []
+        un_number = []
+        metphs = []
+        metphs_intensity = []
+        unaligned_chromosomes = [
+            ilastik_unaligned_chromatin(identity, analysis_df, instance, chromatin, ilastik_project_path)
+            for i, identity in enumerate(ids)
+        ]
+        for i, data_tuple in enumerate(unaligned_chromosomes):
+            un_chromatin.append(data_tuple[0])
+            un_intensity.append(data_tuple[1])
+            un_number.append(data_tuple[2])
+            metphs.append(data_tuple[3])
+            metphs_intensity.append(data_tuple[4])
+
+        cycb = pd.DataFrame(intensity)
+        classification = pd.DataFrame(semantic)
+        un_chromatin_area = pd.DataFrame(un_chromatin)
+        un_chromatin_intensity = pd.DataFrame(un_intensity)
+        un_chromatin_number = pd.DataFrame(un_number)
+        metphs_area = pd.DataFrame(metphs)
+        metphs_intensity = pd.DataFrame(metphs_intensity)
+
+        d_temp = {
+            "ids": ids,
+            "first_mitosis": first_tps,
+            "raw_data_paths": [instance_path, analysis_path, chromatin_path],
+        }
+        other_data = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in d_temp.items()]))
+
+        save_dir = os.path.dirname(analysis_path)
+        if not os.path.isdir(save_dir):
+            save_dir = os.getcwd()
+        save_path = os.path.join(save_dir, f"{name_stub}_cycb_chromatin_ilastic.xlsx")
+
+        with pd.ExcelWriter(save_path, engine="openpyxl") as writer:
+            cycb.to_excel(writer, sheet_name="cycb")
+            classification.to_excel(writer, sheet_name="classification")
+            un_chromatin_area.to_excel(writer, sheet_name="unaligned chromatin area")
+            un_chromatin_intensity.to_excel(
+                writer, sheet_name="unaligned chromatin intensity"
+            )
+            metphs_area.to_excel(writer, sheet_name="metaphase plate area")
+            un_chromatin_number.to_excel(
+                writer, sheet_name="number unaligned chromosomes"
+            )
+            metphs_intensity.to_excel(
+                writer, sheet_name="metaphase plate inten."
+            )
+            other_data.to_excel(writer, sheet_name="analysis_info")
+
+
+
 if __name__ == "__main__":
-    positions = [
-        "A02_s2",
-        "A02_s3",
-        "A02_s5",
-        "B02_s1",
-        "B02_s7",
-        "B02_s8",
-        "E02_s1",
-        "E02_s3",
-        "E02_s4",
-        "F02_s3",
-        "F02_s9",
-        "F02_s10",
-        "G02_s1",
-        "G02_s2",
-        "H02_s1",
-        "H02_s4",
-        "H02_s10",
-    ]
-    analysis_path_templ = "/scratch/ajitj_root/ajitj99/anishjv/for_analysis_complete/20250203_20250203-CycB-pFF1_{}_phs_HeLa_1800_0.35_inference/20250203_20250203-CycB-pFF1_{}_analysis.xlsx"
 
-    instance_path_templ = "/scratch/ajitj_root/ajitj99/anishjv/for_analysis_complete/20250203_20250203-CycB-pFF1_{}_phs_HeLa_1800_0.35_inference/20250203_20250203-CycB-pFF1_{}_instance_movie.tif"
+    root_dir = Path('input/root/dir')
+    inference_dirs = [obj.path for obj in os.scandir(root_dir) if '_inference' in obj.name and obj.is_dir()]
+    analysis_paths = []
+    instance_paths = []
+    chromatin_paths = []
+    positions = []
+    for dir in inference_dirs:
+        name_stub = re.search(r"[A-H]([1-9]|[0][1-9]|[1][0-2])_s(\d{2}|\d{1})", str(dir)).group()
+        an_paths = glob.glob(f'{dir}/*analysis.xlsx')
+        inst_paths = glob.glob(f'{dir}/*instance_movie.tif')
+        chrom_paths = [path for path in glob.glob(f'{root_dir}/*Texas Red.tif') if str(name_stub) in path]
+        analysis_paths += an_paths
+        instance_paths += inst_paths
+        chromatin_paths += chrom_paths
+        positions.append(name_stub)
 
-    chromatin_path_templ = "/scratch/ajitj_root/ajitj99/anishjv/for_analysis/1/20250203_20250203-CycB-pFF1_{}_Texas Red.tif"
+    try:
+        assert len(analysis_paths)  == len(instance_paths) == len(chromatin_paths)
+    except AssertionError:
+        print('Files to analyze not organized properly')
+        print('Analysis paths', len(analysis_paths))
+        print('Instance paths', len(instance_paths))
+        print('Chromatin paths', len(chromatin_paths))
+
 
     cycb_chromatin_batch_analyze(
-        positions, analysis_path_templ, instance_path_templ, chromatin_path_templ
+        positions, analysis_paths, instance_paths, chromatin_paths
     )
