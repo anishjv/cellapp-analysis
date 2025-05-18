@@ -1,5 +1,6 @@
 import pooch
 import numpy as np
+import re
 from detectron2.engine import DefaultPredictor
 from detectron2.engine.defaults import create_ddp_model
 from detectron2.config import get_cfg
@@ -11,30 +12,82 @@ import cell_AAP.annotation.annotation_utils as au  # type:ignore
 from skimage.morphology import binary_erosion, disk
 import skimage.measure
 import tifffile as tiff
+import os
+import pandas as pd
 
 
 
-def get_model(model_name: str):
+def color_masks(
+    segmentations: np.ndarray,
+    labels,
+    method: Optional[str] = "random",
+    custom_dict: Optional[dict[int, int]] = None,
+    erode = False
+) -> np.ndarray:
+    """
+    Takes an array of segmentation masks and colors them by some pre-defined metric. If metric is not given masks are colored randomely
+    -------------------------------------------------------------------------------------------------------------------------------------
+    INPUTS:
+        segmentations: np.ndarray
+        labels: np.ndarray
+        method: str
+        custom_dict: dict
+    OUTPUTS:
+        seg_labeled: np.ndarray
+    """
+    if method == "custom":
+        try:
+            assert custom_dict != None
+            assert np.isin(labels, list(custom_dict.keys())).all() == True
+        except AssertionError:
+            print('Input labels and mapping dictionary did not match when coloring movie, reverting to straight coloring')
+            method = "straight"
+
+    if segmentations.size(dim=0) == 0:
+        seg_labeled = np.zeros(
+            (segmentations.size(dim=1), segmentations.size(dim=2)), dtype="uint8"
+        )
+        return seg_labeled
+
+    seg_labeled = np.zeros_like(segmentations[0], int)
+    for i, mask in enumerate(segmentations):
+        loc_mask = seg_labeled[mask]
+        mask_nonzero = list(filter(lambda x: x != 0, loc_mask))
+        if len(mask_nonzero) < (loc_mask.shape[0] / 4):  # Roughly IOU < 0.5
+
+            if method == "custom":
+                seg_labeled[mask] += custom_dict[labels[i]]
+
+            elif method == "straight":
+                seg_labeled[mask] += labels[i]
+
+            else:
+                if erode == True:
+                    mask = binary_erosion(mask, disk(3))
+                if labels[i] == 0:
+                    seg_labeled[mask] = 2 * i
+                else:
+                    seg_labeled[mask] = 2 * i + 1
+
+    return seg_labeled
+
+
+
+def get_model(model_name:str):
     """
     Instaniates POOCH instance containing model files from the model_registry
     --------------------------------------------------------------------------
     INPUTS:
         cellaap_widget: instance of ui.cellAAPWidget()I
     """
-
-    models = ['HeLa', 'U2OS', "HeLa_oof", "U2OS_new", "U2OS_l", "U2OS_0.7"]
-    try:
-        assert model_name in models
-    except AssertionError:
-        raise Exception(f'Invalid model name selected, model must be one of {models}')
-
     url_registry = {
         "HeLa": "doi:10.5281/zenodo.14226948",
         "U2OS": "doi:10.5281/zenodo.14226985",
         "HeLa_oof": "doi:10.5281/zenodo.14884515",
         "U2OS_new": "doi:10.5281/zenodo.14969500",
         "U2OS_l": "doi:10.5281/zenodo.14969500",
-        "U2OS_0.7": "doi:10.5281/zenodo.15162948"
+        "U2OS_0.7": "doi:10.5281/zenodo.15162948",
+        "HT1080": "doi:10.5281/zenodo.15231943"
     }
 
     weights_registry = {
@@ -61,7 +114,12 @@ def get_model(model_name: str):
         "U2OS_0.7": (
             "model_final.pth",
             "md5:a0ae4412c819f8953fd40bf0aca3c3d0"
+        ),
+        "HT1080": (
+            "model_final.pth",
+            "md5:3ba0e2d1b51dbc9669d9b16b25133406"
         )
+
     }
 
     configs_registry = {
@@ -94,6 +152,10 @@ def get_model(model_name: str):
             "config.yaml",
             "md5:28ff30a8690a15dfbd8f3977d6e11423",
             "lazy"
+        ),
+        "HT1080": (
+            "config.yaml",
+            "md5:2351798dca6bf1470c4095171ca1b86f"
         )
     }
 
@@ -116,7 +178,8 @@ def get_model(model_name: str):
 def configure(
     model_name: str,
     confluency_est: int = 2000,
-    conf_threshold: float = 0.3
+    conf_threshold: float = 0.3,
+    save_dir: Optional[bool] = None
 ) -> dict:
 
     """
@@ -177,6 +240,9 @@ def configure(
         DetectionCheckpointer(predictor).load(cfg.train.init_checkpoint)
         predictor.eval()
 
+    if save_dir == None:
+        save_dir = os.getcwd()
+
     print("Configurations successfully saved")
     configured = True
     container.update(
@@ -186,57 +252,13 @@ def configure(
             "model_type": model_type,
             "model_name": model_name,
             "confluency_est": confluency_est,
-            "conf_threshold": conf_threshold
+            "conf_threshold": conf_threshold,
+            "save_dir": save_dir
+
         }
     )
 
     return container
-
-
-def color_masks(
-    segmentations: np.ndarray,
-    labels,
-    method: Optional[str] = "random",
-    custom_dict: Optional[dict[int, int]] = None,
-    erode = False
-) -> np.ndarray:
-    """
-    Takes an array of segmentation masks and colors them by some pre-defined metric. If metric is not given masks are colored randomely
-    -------------------------------------------------------------------------------------------------------------------------------------
-    INPUTS:
-        segmentations: np.ndarray
-        labels: list
-        method: str
-        custom_dict: dict
-    OUTPUTS:
-        seg_labeled: np.ndarray
-    """
-
-    if segmentations.size(dim=0) == 0:
-        seg_labeled = np.zeros(
-            (segmentations.size(dim=1), segmentations.size(dim=2)), dtype="uint8"
-        )
-        return seg_labeled
-
-    seg_labeled = np.zeros_like(segmentations[0], int)
-    for i, mask in enumerate(segmentations):
-        loc_mask = seg_labeled[mask]
-        mask_nonzero = list(filter(lambda x: x != 0, loc_mask))
-        if len(mask_nonzero) < (loc_mask.shape[0] / 4):  # Roughly IOU < 0.5
-            if method == "custom" and custom_dict != None:
-                for j in custom_dict.keys():
-                    if labels[i] == j:
-                        seg_labeled[mask] += custom_dict[j]
-
-            else:
-                if erode == True:
-                    mask = binary_erosion(mask, disk(3))
-                if labels[i] == 0:
-                    seg_labeled[mask] = 2 * i
-                else:
-                    seg_labeled[mask] = 2 * i - 1
-
-    return seg_labeled
 
 
 def inference(
@@ -277,22 +299,22 @@ def inference(
             )[0]
 
     segmentations = output["instances"].pred_masks.to("cpu")
-    labels = output["instances"].pred_classes.to("cpu")
+    labels = output["instances"].pred_classes.to("cpu").numpy()
     scores = output["instances"].scores.to("cpu").numpy()
+    scores = (scores*100).astype('uint16')
     classes = output['instances'].pred_classes.to("cpu").numpy()
-    confidence = np.vstack(
-        (scores, classes)
-    )
 
     seg_fordisp = color_masks(
         segmentations, labels, method="custom", custom_dict={0: 1, 1: 100}
     )
 
+    scores_mov = color_masks(segmentations, scores, method="straight")
+
     if analyze:
         seg_fortracking = color_masks(segmentations, labels, method="random", erode = True)
     else:
         seg_fortracking = color_masks(segmentations, labels, method="random")
-
+        
     centroids = []
     for i, _ in enumerate(labels):
         labeled_mask = skimage.measure.label(segmentations[i])
@@ -302,7 +324,7 @@ def inference(
 
         centroids.append(centroid)
 
-    return seg_fordisp, seg_fortracking, centroids, img, confidence
+    return seg_fordisp, seg_fortracking, centroids, img, scores_mov, classes
 
 
 def run_inference(container: dict, movie_file: str, interval: list[int]):
@@ -310,7 +332,7 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
     Runs inference on image returned by self.image_select(), saves inference result if save selector has been checked
     ----------------------------------------------------------------------------------------------------------------
     INPUTS:
-        container: dict, surogate object for cell_aap_widget,
+        container: dict, surrogate object for cell_aap_widget,
         movie_file: str, path to movie to run inference on,
         interval: list[int], range of images within movie to run inference on, for example, if the movie contains 89 images [0, 88] is the largest possible interval.
     OUTPUTS:
@@ -319,7 +341,8 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
     prog_count = 0
     instance_movie = []
     semantic_movie = []
-    confidences = []
+    scores_movie = []
+    classes_list = []
     points = ()
 
 
@@ -332,7 +355,6 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
         raise Exception(
             "You must configure the model before running inference"
         )
-        return
 
     try:
        assert interval[0] >=0
@@ -353,23 +375,25 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
             prog_count += 1
             frame += interval[0]
             img = au.bw_to_rgb(im_array[frame])
-            semantic_seg, instance_seg, centroids, img, confidence= inference(
+            semantic_seg, instance_seg, centroids, img, scores_mov, classes= inference(
                 container, img, frame - interval[0]
             )
             movie.append(img)
             semantic_movie.append(semantic_seg.astype("uint16"))
             instance_movie.append(instance_seg.astype("uint16"))
-            confidences.append(confidence)
+            scores_movie.append(scores_mov.astype("uint16"))
+            classes_list.append(classes)
             if len(centroids) != 0:
                 points += (centroids,)
 
     elif len(im_array.shape) == 2:
         prog_count += 1
         img = au.bw_to_rgb(im_array)
-        semantic_seg, instance_seg, centroids, img, confidence= inference(container, img)
+        semantic_seg, instance_seg, centroids, img, scores_mov, classes= inference(container, img)
         semantic_movie.append(semantic_seg.astype("uint16"))
         instance_movie.append(instance_seg.astype("uint16"))
-        confidences.append(confidence)
+        scores_movie.append(scores_mov.astype("uint16"))
+        classes_list.append(classes)
         if len(centroids) != 0:
             points += (centroids,)
 
@@ -377,7 +401,9 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
 
     semantic_movie = np.asarray(semantic_movie)
     instance_movie = np.asarray(instance_movie)
+    scores_movie = np.asarray(scores_movie) 
     points_array = np.vstack(points)
+    classes_array = np.concatenate(classes_list, axis =0)
 
     cache_entry_name = f"{name}_{model_name}_{container['confluency_est']}_{round(container['conf_threshold'], ndigits = 2)}"
 
@@ -387,7 +413,54 @@ def run_inference(container: dict, movie_file: str, interval: list[int]):
             "semantic_movie": semantic_movie,
             "instance_movie": instance_movie,
             "centroids": points_array,
-            "confidence": confidences
+            "scores_movie": scores_movie,
+            "classes": classes_array
         }
 
     return result
+
+def save(container, result):
+    """
+    Saves and analyzes an inference result
+    """
+
+
+    filepath = container['save_dir']
+    inference_result_name = result['name']
+
+    model_name = container["model_name"]
+    try:
+        position = re.search(r"_s\d_", inference_result_name).group()
+        analysis_file_prefix = inference_result_name.split(position)[0] + position
+    except Exception as error:
+        analysis_file_prefix = inference_result_name.split(model_name)[0]
+
+
+    inference_folder_path = os.path.join(filepath, inference_result_name + "_inference")
+    try:
+        os.mkdir(inference_folder_path)
+    except OSError as error:
+        print("Directory was already present, saving in found directory")
+    
+    tiff.imwrite(
+        os.path.join(
+            inference_folder_path, analysis_file_prefix + "semantic_movie.tif"
+        ),
+        result["semantic_movie"],
+        dtype="uint16",
+    )
+
+    tiff.imwrite(
+        os.path.join(
+            inference_folder_path, analysis_file_prefix + "instance_movie.tif"
+        ),
+        result["instance_movie"],
+        dtype="uint16",
+    )
+
+    tiff.imwrite(
+        os.path.join(
+            inference_folder_path, analysis_file_prefix + "scores_movie.tif"
+        ),
+        result["scores_movie"],
+    )

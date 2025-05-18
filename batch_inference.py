@@ -9,8 +9,8 @@ confluency_est = 1800 # can be in the interval (0, 2000]
 conf_threshold = .25 # can be in the interval (0, 1)
 
 # folder definition
-root_folder = Path('/nfs/turbo/umms-ajitj/anishjv/HeLa/for_inference/')
-save_dir = Path('/nfs/turbo/umms-ajitj/anishjv/HeLa/complete/')
+root_folder = Path('/scratch/ajitj_root/ajitj99/anishjv/HeLa_for_inf/for_inference')
+save_dir = Path('/scratch/ajitj_root/ajitj99/anishjv/HeLa_for_inf/complete')
 filter_str  = '*.tif'
 
 file_list = []
