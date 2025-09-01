@@ -809,7 +809,6 @@ if __name__ == "__main__":
             if len(cells_with_metaphase) > 0:
                 # Randomly select a cell
                 cell_id = random.choice(cells_with_metaphase)
-                cell_id = 758
                 metaphase_frames = analysis_df.query(f"particle == {cell_id} and semantic_smoothed == 1")
                 
                 print(f"Randomly selected cell {cell_id} from position {positions[0]}")

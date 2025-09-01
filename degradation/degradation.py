@@ -204,7 +204,7 @@ def cycb_chromatin_batch_analyze(
 
         print(f"Working on position: {name_stub}")
         intensity, semantic, ids, first_tps, frame_traces = retrieve_traces(
-            analysis_df, "GFP", int(frame_interval_minutes)
+            analysis_df, "GFP", int(frame_interval_minutes), remove_end_mitosis=False
         )
 
         # Initialize dataframe with empty lists for each column
